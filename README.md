@@ -64,6 +64,8 @@ The integration tests demonstrate excellent performance:
 src/
 ├── data/
 │   └── data_loader.py          # Enhanced DataLoader with pandas integration
+├── models/
+│   └── nlp.py                 # Comprehensive NLP processing wrapper
 ├── dagster/
 │   ├── assets.py              # Dagster assets for data processing
 │   ├── jobs.py                # Dagster jobs and schedules
@@ -120,6 +122,68 @@ stats = loader.group_by_domain()
 print('Domain statistics:')
 print(stats)
 "
+```
+
+## 🧠 **NLP Processing Capabilities**
+
+### **Multi-Language NLP Support**
+- **English Processing**: spaCy + NLTK + VADER sentiment analysis
+- **Vietnamese Processing**: underthesea library
+- **Automatic Language Detection**: langdetect integration
+- **Object-Oriented Design**: Abstract base classes with inheritance
+
+### **NLP Features**
+- ✅ **Lexical Analysis**: Tokenization, POS tagging, lemmatization
+- ✅ **Syntactic Analysis**: Dependency parsing
+- ✅ **Semantic Analysis**: Sentiment analysis, named entity recognition
+- ✅ **Text Classification**: Topic modeling, keyword extraction
+- ✅ **Grammar Analysis**: Basic grammar checking and validation
+- ✅ **Comprehensive Analysis**: Readability metrics, lexical diversity
+
+### **NLP Usage Examples**
+
+```python
+from src.models.nlp import create_default_nlp_processor, process_query_text
+
+# Create NLP processor
+processor = create_default_nlp_processor()
+
+# Basic text processing
+result = processor.process_text("NetMind provides excellent workflow automation")
+print(f"Language: {result.language.value}")
+print(f"Sentiment: {result.sentiment}")
+print(f"Entities: {result.entities}")
+
+# Comprehensive analysis
+analysis = processor.analyze_text_comprehensive("Your query text here")
+print(f"Sentiment Score: {analysis.sentiment_score:.3f}")
+print(f"Keywords: {analysis.keywords}")
+print(f"Topics: {analysis.topics}")
+
+# Quick query processing
+result = process_query_text("How to check internet speed?")
+print(f"Language: {result.language.value}")
+print(f"Sentiment: {result.sentiment.get('compound', 0.0):.3f}")
+
+    # Check grammar issues
+    analysis = processor.analyze_text_comprehensive("Hello world!")
+    print(f"Grammar issues: {analysis.grammar_issues}")
+```
+
+### **NLP Demo Script**
+```bash
+# Run comprehensive NLP demonstration
+python nlp_demo.py
+```
+
+### **Dagster NLP Integration**
+```python
+# NLP assets available in Dagster:
+# - nlp_processor: Initialize NLP processor
+# - nlp_text_analysis: Comprehensive text analysis
+# - nlp_sentiment_analysis: Sentiment analysis
+# - nlp_entity_extraction: Named entity extraction
+# - nlp_comprehensive_report: Combined NLP analysis report
 ```
 
 ## 📈 DataLoader pandas Integration Examples
@@ -222,12 +286,21 @@ docker-compose up -d
 
 ## 📋 Requirements
 
+### **Core Dependencies**
 - Python 3.10+
 - pandas 2.0+
 - Dagster 1.5+
 - Docker & Docker Compose
 - PostgreSQL (for Dagster metadata)
 - Redis (optional, for caching)
+
+### **NLP Dependencies**
+- **spaCy**: English language processing
+- **underthesea**: Vietnamese language processing
+- **NLTK**: General NLP toolkit
+- **VADER**: Sentiment analysis
+- **langdetect**: Language detection
+- **textblob**: Additional text processing utilities
 
 ## 🔧 Configuration
 
