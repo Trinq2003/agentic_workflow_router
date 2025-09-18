@@ -448,6 +448,159 @@ class DataLoader:
             self.get_processed_data()
         return iter(self._processed_data)
 
+    def to_dataframe(self) -> pd.DataFrame:
+        """
+        Convert processed data to pandas DataFrame.
+
+        Returns:
+            pd.DataFrame: DataFrame with columns [query, knowledge_domain, workers, index]
+        """
+        if self._processed_data is None:
+            self.get_processed_data()
+
+        data = []
+        for query_data in self._processed_data:
+            row = {
+                'query': query_data.query,
+                'knowledge_domain': query_data.knowledge_domain,
+                'workers': ', '.join(query_data.workers),  # Join workers back to string
+                'workers_list': query_data.workers,  # Keep as list for analysis
+                'index': query_data.index
+            }
+            data.append(row)
+
+        return pd.DataFrame(data)
+
+    def get_raw_dataframe(self) -> pd.DataFrame:
+        """
+        Get the raw pandas DataFrame after cleaning.
+
+        Returns:
+            pd.DataFrame: Raw cleaned DataFrame
+        """
+        if self._data is None:
+            self.load_data()
+
+        return self.clean_data(self._data)
+
+    def get_domain_dataframe(self, domain: str) -> pd.DataFrame:
+        """
+        Get DataFrame filtered by knowledge domain.
+
+        Args:
+            domain: Knowledge domain to filter by
+
+        Returns:
+            pd.DataFrame: Filtered DataFrame
+        """
+        df = self.to_dataframe()
+        return df[df['knowledge_domain'] == domain].copy()
+
+    def get_worker_dataframe(self, worker: str) -> pd.DataFrame:
+        """
+        Get DataFrame filtered by worker.
+
+        Args:
+            worker: Worker name to filter by
+
+        Returns:
+            pd.DataFrame: Filtered DataFrame
+        """
+        df = self.to_dataframe()
+        return df[df['workers_list'].apply(lambda x: worker in x)].copy()
+
+    def group_by_domain(self) -> pd.DataFrame:
+        """
+        Group data by knowledge domain and return aggregated statistics.
+
+        Returns:
+            pd.DataFrame: Aggregated statistics by domain
+        """
+        df = self.to_dataframe()
+
+        # Group by domain and calculate statistics
+        grouped = df.groupby('knowledge_domain').agg({
+            'query': 'count',
+            'workers': lambda x: len(set(', '.join(x).split(', '))),  # Unique workers per domain
+        }).rename(columns={
+            'query': 'query_count',
+            'workers': 'unique_workers_count'
+        })
+
+        # Add worker lists per domain
+        worker_lists = df.groupby('knowledge_domain')['workers_list'].apply(list)
+        grouped['worker_lists'] = worker_lists
+
+        return grouped.reset_index()
+
+    def group_by_worker(self) -> pd.DataFrame:
+        """
+        Group data by worker and return aggregated statistics.
+
+        Returns:
+            pd.DataFrame: Aggregated statistics by worker
+        """
+        df = self.to_dataframe()
+
+        # Explode workers list to get one row per worker-query combination
+        exploded = df.explode('workers_list')
+
+        # Group by worker and calculate statistics
+        grouped = exploded.groupby('workers_list').agg({
+            'query': 'count',
+            'knowledge_domain': lambda x: len(set(x)),  # Unique domains per worker
+        }).rename(columns={
+            'query': 'query_count',
+            'knowledge_domain': 'unique_domains_count'
+        })
+
+        # Add domain lists per worker
+        domain_lists = exploded.groupby('workers_list')['knowledge_domain'].apply(list)
+        grouped['domain_lists'] = domain_lists
+
+        return grouped.reset_index().rename(columns={'workers_list': 'worker'})
+
+    def sample_dataframe(self, n: int = 100, random_state: int = 42) -> pd.DataFrame:
+        """
+        Get a random sample of the data as DataFrame.
+
+        Args:
+            n: Number of samples to return
+            random_state: Random seed for reproducibility
+
+        Returns:
+            pd.DataFrame: Random sample of data
+        """
+        df = self.to_dataframe()
+        return df.sample(n=min(n, len(df)), random_state=random_state).copy()
+
+    def filter_dataframe(self, query_filter: Optional[str] = None,
+                        domain_filter: Optional[str] = None,
+                        worker_filter: Optional[str] = None) -> pd.DataFrame:
+        """
+        Filter DataFrame by multiple criteria.
+
+        Args:
+            query_filter: String to search in query text (case-insensitive)
+            domain_filter: Knowledge domain to filter by
+            worker_filter: Worker name to filter by
+
+        Returns:
+            pd.DataFrame: Filtered DataFrame
+        """
+        df = self.to_dataframe()
+
+        if query_filter:
+            df = df[df['query'].str.contains(query_filter, case=False, na=False)]
+
+        if domain_filter:
+            df = df[df['knowledge_domain'] == domain_filter]
+
+        if worker_filter:
+            df = df[df['workers_list'].apply(lambda x: worker_filter in x)]
+
+        return df.copy()
+
 
 def create_default_dataloader(data_path: Union[str, Path] = "data/dataset.xlsx") -> DataLoader:
     """
@@ -490,6 +643,51 @@ if __name__ == "__main__":
             print(f"{i+1}. Query: {query.query[:50]}...")
             print(f"   Domain: {query.knowledge_domain}")
             print(f"   Workers: {', '.join(query.workers)}")
+            print()
+
+        # Demonstrate pandas DataFrame functionality
+        print("\n=== Pandas DataFrame Examples ===")
+
+        # Get full DataFrame
+        df = loader.to_dataframe()
+        print(f"DataFrame shape: {df.shape}")
+        print(f"DataFrame columns: {list(df.columns)}")
+        print(f"DataFrame memory usage: {df.memory_usage(deep=True).sum() / 1024:.1f} KB")
+
+        # Show domain distribution
+        print("\nKnowledge Domain Distribution:")
+        domain_counts = df['knowledge_domain'].value_counts().head(10)
+        for domain, count in domain_counts.items():
+            print(f"  {domain}: {count} queries")
+
+        # Show worker distribution
+        print("\nWorker Distribution:")
+        worker_counts = df['workers_list'].explode().value_counts().head(10)
+        for worker, count in worker_counts.items():
+            print(f"  {worker}: {count} queries")
+
+        # Group by domain analysis
+        print("\n=== Group by Domain Analysis ===")
+        domain_stats = loader.group_by_domain()
+        print("Domain statistics:")
+        print(domain_stats.to_string(index=False))
+
+        # Filter examples
+        print("\n=== Filtering Examples ===")
+        vo_tuyen_df = loader.get_domain_dataframe('VO_TUYEN')
+        print(f"VO_TUYEN domain has {len(vo_tuyen_df)} queries")
+
+        # Search for specific terms
+        search_df = loader.filter_dataframe(query_filter='Vinaphone')
+        print(f"Found {len(search_df)} queries containing 'Vinaphone'")
+
+        # Sample data
+        sample_df = loader.sample_dataframe(5)
+        print(f"\nRandom sample of {len(sample_df)} queries:")
+        for idx, row in sample_df.iterrows():
+            print(f"  Query: {row['query'][:60]}...")
+            print(f"  Domain: {row['knowledge_domain']}")
+            print(f"  Workers: {row['workers']}")
             print()
 
     except Exception as e:
