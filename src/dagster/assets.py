@@ -14,6 +14,7 @@ from dagster import asset, AssetIn, AssetOut, multi_asset, Output, MetadataValue
 from dagster_pandas import PandasColumn, create_dagster_pandas_dataframe_type
 
 from ..data.data_loader import DataLoader, DataLoaderConfig
+from ..models.nlp_models import NLPProcessor, NLPConfig, TextAnalysis, NLPResult
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -442,12 +443,352 @@ def data_sample_asset(processed_data: NetMindDataFrame) -> Output[NetMindDataFra
 
     sample_df = processed_data.sample(n=sample_size, random_state=42).copy()
 
+    return         Output(
+            value=sample_df,
+            metadata={
+                "sample_size": len(sample_df),
+                "total_population": len(processed_data),
+                "sampling_ratio": len(sample_df) / len(processed_data),
+                "random_state": 42,
+            }
+        )
+
+
+# NLP Processing Assets
+
+@asset(
+    name="nlp_processor",
+    description="Initialize NLP processor with configuration",
+    compute_kind="nlp",
+    metadata={
+        "supported_languages": ["English", "Vietnamese"],
+        "techniques": ["tokenization", "sentiment", "ner", "parsing"]
+    }
+)
+def nlp_processor_asset() -> Output[NLPProcessor]:
+    """
+    Asset for initializing the NLP processor.
+
+    Returns:
+        Configured NLPProcessor instance
+    """
+    logger.info("Initializing NLP processor")
+
+    config = NLPConfig(
+        auto_detect_language=True,
+        enable_caching=True
+    )
+
+    processor = NLPProcessor(config)
+
     return Output(
-        value=sample_df,
+        value=processor,
         metadata={
-            "sample_size": len(sample_df),
-            "total_population": len(processed_data),
-            "sampling_ratio": len(sample_df) / len(processed_data),
-            "random_state": 42,
+            "supported_languages": processor.get_supported_languages(),
+            "available_techniques": processor.get_available_techniques(),
+            "auto_language_detection": config.auto_detect_language,
+        }
+    )
+
+
+@asset(
+    name="nlp_text_analysis",
+    description="Perform comprehensive NLP analysis on processed text data",
+    io_manager_key="pandas_io_manager",
+    ins={"processed_data": AssetIn("processed_netmind_data"), "nlp_processor": AssetIn("nlp_processor")},
+    metadata={
+        "analysis_type": "comprehensive",
+        "metrics": ["sentiment", "entities", "keywords", "topics"]
+    }
+)
+def nlp_text_analysis_asset(processed_data: NetMindDataFrame, nlp_processor: NLPProcessor) -> Output[pd.DataFrame]:
+    """
+    Asset for performing comprehensive NLP analysis on processed text data.
+
+    Args:
+        processed_data: Processed DataFrame from processed_netmind_data asset
+        nlp_processor: NLPProcessor instance
+
+    Returns:
+        DataFrame with NLP analysis results
+    """
+    logger.info("Performing comprehensive NLP analysis on processed data")
+
+    analysis_results = []
+
+    # Process each query in the dataset
+    for idx, row in processed_data.iterrows():
+        query_text = row['query']
+
+        try:
+            # Perform comprehensive analysis
+            analysis = nlp_processor.analyze_text_comprehensive(query_text)
+
+            # Convert to dictionary and add metadata
+            analysis_dict = analysis.to_dict()
+            analysis_dict['original_index'] = idx
+            analysis_dict['knowledge_domain'] = row.get('knowledge_domain', '')
+
+            analysis_results.append(analysis_dict)
+
+        except Exception as e:
+            logger.warning(f"Failed to analyze query at index {idx}: {e}")
+            # Add error entry
+            analysis_results.append({
+                'original_index': idx,
+                'query': query_text,
+                'error': str(e),
+                'language': 'unknown',
+                'word_count': 0,
+                'sentiment_score': 0.0,
+                'entities': [],
+                'keywords': [],
+                'topics': [],
+                'processing_time': 0.0
+            })
+
+    # Convert to DataFrame
+    analysis_df = pd.DataFrame(analysis_results)
+
+    logger.info(f"NLP analysis completed for {len(analysis_df)} queries")
+
+    return Output(
+        value=analysis_df,
+        metadata={
+            "total_queries_analyzed": len(analysis_df),
+            "successful_analyses": len(analysis_df[analysis_df.get('error', '').isna()]),
+            "failed_analyses": len(analysis_df[analysis_df.get('error', '').notna()]),
+            "avg_processing_time": analysis_df['processing_time'].mean(),
+            "unique_languages": analysis_df['language'].nunique() if 'language' in analysis_df.columns else 0,
+            "avg_sentiment": analysis_df['sentiment_score'].mean() if 'sentiment_score' in analysis_df.columns else 0.0,
+        }
+    )
+
+
+@asset(
+    name="nlp_sentiment_analysis",
+    description="Analyze sentiment of queries and generate sentiment reports",
+    io_manager_key="pandas_io_manager",
+    ins={"processed_data": AssetIn("processed_netmind_data"), "nlp_processor": AssetIn("nlp_processor")},
+    metadata={
+        "analysis_type": "sentiment",
+        "sentiment_metrics": ["compound", "positive", "negative", "neutral"]
+    }
+)
+def nlp_sentiment_analysis_asset(processed_data: NetMindDataFrame, nlp_processor: NLPProcessor) -> Output[pd.DataFrame]:
+    """
+    Asset for sentiment analysis of queries.
+
+    Args:
+        processed_data: Processed DataFrame from processed_netmind_data asset
+        nlp_processor: NLPProcessor instance
+
+    Returns:
+        DataFrame with sentiment analysis results
+    """
+    logger.info("Performing sentiment analysis on queries")
+
+    sentiment_results = []
+
+    for idx, row in processed_data.iterrows():
+        query_text = row['query']
+
+        try:
+            # Basic NLP processing
+            result = nlp_processor.process_text(
+                query_text,
+                techniques=["tokenization", "sentiment_analysis", "named_entity_recognition"]
+            )
+
+            sentiment_results.append({
+                'original_index': idx,
+                'query': query_text,
+                'language': result.language.value,
+                'sentiment_compound': result.sentiment.get('compound', 0.0),
+                'sentiment_positive': result.sentiment.get('pos', 0.0),
+                'sentiment_negative': result.sentiment.get('neg', 0.0),
+                'sentiment_neutral': result.sentiment.get('neu', 0.0),
+                'entities': result.entities,
+                'tokens': result.tokens,
+                'processing_time': result.processing_time
+            })
+
+        except Exception as e:
+            logger.warning(f"Failed to analyze sentiment for query at index {idx}: {e}")
+            sentiment_results.append({
+                'original_index': idx,
+                'query': query_text,
+                'error': str(e),
+                'sentiment_compound': 0.0,
+                'sentiment_positive': 0.0,
+                'sentiment_negative': 0.0,
+                'sentiment_neutral': 1.0,
+                'entities': [],
+                'tokens': [],
+                'processing_time': 0.0
+            })
+
+    sentiment_df = pd.DataFrame(sentiment_results)
+
+    # Add sentiment classification
+    sentiment_df['sentiment_class'] = pd.cut(
+        sentiment_df['sentiment_compound'],
+        bins=[-1, -0.5, -0.1, 0.1, 0.5, 1],
+        labels=['Very Negative', 'Negative', 'Neutral', 'Positive', 'Very Positive']
+    )
+
+    logger.info("Sentiment analysis completed")
+
+    return Output(
+        value=sentiment_df,
+        metadata={
+            "total_queries": len(sentiment_df),
+            "sentiment_distribution": sentiment_df['sentiment_class'].value_counts().to_dict(),
+            "avg_sentiment": sentiment_df['sentiment_compound'].mean(),
+            "positive_queries": len(sentiment_df[sentiment_df['sentiment_compound'] > 0.1]),
+            "negative_queries": len(sentiment_df[sentiment_df['sentiment_compound'] < -0.1]),
+            "neutral_queries": len(sentiment_df[
+                (sentiment_df['sentiment_compound'] >= -0.1) &
+                (sentiment_df['sentiment_compound'] <= 0.1)
+            ]),
+        }
+    )
+
+
+@asset(
+    name="nlp_entity_extraction",
+    description="Extract and analyze named entities from queries",
+    io_manager_key="pandas_io_manager",
+    ins={"processed_data": AssetIn("processed_netmind_data"), "nlp_processor": AssetIn("nlp_processor")},
+    metadata={
+        "analysis_type": "entity_extraction",
+        "entity_types": ["PERSON", "ORG", "GPE", "MONEY", "DATE", "PERCENT"]
+    }
+)
+def nlp_entity_extraction_asset(processed_data: NetMindDataFrame, nlp_processor: NLPProcessor) -> Output[pd.DataFrame]:
+    """
+    Asset for named entity extraction and analysis.
+
+    Args:
+        processed_data: Processed DataFrame from processed_netmind_data asset
+        nlp_processor: NLPProcessor instance
+
+    Returns:
+        DataFrame with entity extraction results
+    """
+    logger.info("Extracting named entities from queries")
+
+    entity_results = []
+
+    for idx, row in processed_data.iterrows():
+        query_text = row['query']
+
+        try:
+            # Basic NLP processing with NER
+            result = nlp_processor.process_text(
+                query_text,
+                techniques=["tokenization", "named_entity_recognition"]
+            )
+
+            entity_results.append({
+                'original_index': idx,
+                'query': query_text,
+                'language': result.language.value,
+                'entities': result.entities,
+                'entity_count': len(result.entities),
+                'processing_time': result.processing_time
+            })
+
+        except Exception as e:
+            logger.warning(f"Failed to extract entities for query at index {idx}: {e}")
+            entity_results.append({
+                'original_index': idx,
+                'query': query_text,
+                'error': str(e),
+                'entities': [],
+                'entity_count': 0,
+                'processing_time': 0.0
+            })
+
+    entity_df = pd.DataFrame(entity_results)
+
+    # Flatten entities for analysis
+    all_entities = []
+    for _, row in entity_df.iterrows():
+        for entity in row['entities']:
+            all_entities.append({
+                'query_index': row['original_index'],
+                'entity_text': entity['text'],
+                'entity_label': entity['label'],
+                'confidence': entity.get('confidence', 1.0),
+                'language': row['language']
+            })
+
+    entity_analysis_df = pd.DataFrame(all_entities)
+
+    logger.info("Entity extraction completed")
+
+    return Output(
+        value=entity_df,
+        metadata={
+            "total_queries": len(entity_df),
+            "queries_with_entities": len(entity_df[entity_df['entity_count'] > 0]),
+            "total_entities": len(entity_analysis_df) if len(entity_analysis_df) > 0 else 0,
+            "entity_types": entity_analysis_df['entity_label'].value_counts().to_dict() if len(entity_analysis_df) > 0 else {},
+            "avg_entities_per_query": entity_df['entity_count'].mean(),
+        }
+    )
+
+
+@asset(
+    name="nlp_comprehensive_report",
+    description="Generate comprehensive NLP analysis report",
+    io_manager_key="pandas_io_manager",
+    ins={
+        "text_analysis": AssetIn("nlp_text_analysis"),
+        "sentiment_analysis": AssetIn("nlp_sentiment_analysis"),
+        "entity_analysis": AssetIn("nlp_entity_extraction"),
+        "domain_stats": AssetIn("domain_statistics")
+    },
+    metadata={"report_type": "nlp_summary"}
+)
+def nlp_comprehensive_report_asset(text_analysis, sentiment_analysis, entity_analysis, domain_stats) -> Output[pd.DataFrame]:
+    """
+    Asset for generating comprehensive NLP analysis report.
+
+    Args:
+        text_analysis: Text analysis results
+        sentiment_analysis: Sentiment analysis results
+        entity_analysis: Entity extraction results
+        domain_stats: Domain statistics
+
+    Returns:
+        DataFrame with comprehensive NLP report
+    """
+    logger.info("Generating comprehensive NLP report")
+
+    # Summary statistics
+    summary_stats = {
+        'total_queries': len(text_analysis),
+        'avg_word_count': text_analysis['word_count'].mean(),
+        'avg_sentiment': sentiment_analysis['sentiment_compound'].mean(),
+        'total_entities': entity_analysis['entity_count'].sum(),
+        'unique_languages': text_analysis['language'].nunique(),
+        'avg_processing_time': text_analysis['processing_time'].mean(),
+        'sentiment_distribution': sentiment_analysis['sentiment_class'].value_counts().to_dict(),
+        'top_keywords': text_analysis['keywords'].explode().value_counts().head(10).to_dict(),
+        'top_topics': text_analysis['topics'].explode().value_counts().head(5).to_dict(),
+    }
+
+    summary_df = pd.DataFrame([summary_stats])
+
+    logger.info("Comprehensive NLP report generated")
+
+    return Output(
+        value=summary_df,
+        metadata={
+            "report_generated_at": pd.Timestamp.now().isoformat(),
+            "total_domains_analyzed": len(domain_stats),
+            "nlp_metrics_covered": ["sentiment", "entities", "keywords", "topics"],
         }
     )
