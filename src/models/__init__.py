@@ -29,3 +29,5 @@ __all__ = [
     'LanguageDetector',
     'TextAnalysis'
 ]
+
+nlp_processor = NLPProcessor()

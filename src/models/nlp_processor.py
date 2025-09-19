@@ -12,7 +12,7 @@ Built with proper OOP principles using abstract base classes and inheritance.
 
 import logging
 import re
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Optional
 from pathlib import Path
 
 # Import base classes
@@ -30,11 +30,6 @@ from .config import NLPConfig, NLPConfigLoader, Language
 # Import processors
 from .processor.english_processor import EnglishProcessor
 from .processor.vietnamese_processor import VietnameseProcessor
-
-# Import NLP models
-from .nlp_models.spacy import SpacyModel
-from .nlp_models.nltk import NLTKModel
-from .nlp_models.underthesea import UndertheseaModel
 
 # Check library availability for TextPreprocessor
 try:
@@ -65,7 +60,7 @@ class TextPreprocessor:
         text = re.sub(r'\s+', ' ', text.strip())
 
         # Remove special characters but keep punctuation
-        text = re.sub(r'[^\w\s\.\,\!\?\:\;\-\'\"]', '', text)
+        text = re.sub(r'[^\w\s\.\,\!\?\:\;\-\'"]', '', text)
 
         return text
 
@@ -126,8 +121,8 @@ class NLPProcessor:
         elif language == Language.VIETNAMESE:
             return self.vietnamese_processor
         else:
-            # Default to English processor
-            return self.english_processor
+            # Default to Vietnamese processor
+            return self.vietnamese_processor
 
     def process_text(self, text: str, techniques: List[NLPTechnique] = None) -> NLPResult:
         """
@@ -148,6 +143,7 @@ class NLPProcessor:
 
         # Clean text
         cleaned_text = self.text_preprocessor.clean_text(text)
+        logger.debug(f"Cleaned text: Original: {text} -> Cleaned: {cleaned_text}")
 
         # Detect language
         if self.config.auto_detect_language:
@@ -231,9 +227,15 @@ class NLPProcessor:
 
         # Basic processing
         cleaned_text = self.text_preprocessor.clean_text(text)
-        language = self.language_detector.detect_language(cleaned_text)
-        processor = self._get_processor(language)
+        logger.debug(f"Cleaned text: Original: {text} -> Cleaned: {cleaned_text}")
 
+        # Detect language
+        if self.config.auto_detect_language:
+            language = self.language_detector.detect_language(cleaned_text)
+        else:
+            language = self.config.default_language
+        processor = self._get_processor(language)
+        
         # Tokenization and basic metrics
         tokens = processor.tokenize(cleaned_text)
         lemmas = processor.lemmatize(cleaned_text)
