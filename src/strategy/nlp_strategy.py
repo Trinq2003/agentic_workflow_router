@@ -2,7 +2,7 @@ from typing import List, Any
 from strategy.base_classes import BaseStrategy
 import logging
 import torch
-from logic.nlp import DetectSyntaxInQueryLogic, FindTimePatternInQueryLogic
+from logic.nlp import DetectSyntaxInQueryLogic, FindTimePatternInQueryLogic, DetectHumanFeatureInQueryLogic
 logger = logging.getLogger(__name__)
 
 
@@ -11,7 +11,8 @@ class NLPStrategy(BaseStrategy):
         super().__init__()
         self.add_logic(DetectSyntaxInQueryLogic())
         self.add_logic(FindTimePatternInQueryLogic())
-
+        self.add_logic(DetectHumanFeatureInQueryLogic())
+        
     def _reduce(self, results: List[Any]) -> Any:
         """
         Sum tensors from all NLP logics element-wise.
@@ -24,13 +25,11 @@ class NLPStrategy(BaseStrategy):
         """
         if not results:
             return torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
-
-        # Sum all tensors element-wise
+        
         try:
             summed_result = torch.zeros_like(results[0])
             for result in results:
                 summed_result = summed_result + result
-            logger.debug(f"Successfully summed {len(results)} tensors")
             return summed_result
         except Exception as e:
             logger.error(f"Error summing tensors: {e}")
