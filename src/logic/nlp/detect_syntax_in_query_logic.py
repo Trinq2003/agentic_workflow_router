@@ -19,8 +19,8 @@ class DetectSyntaxInQueryLogic(BaseLogic):
 
     Uses simple whitespace-based detection to avoid file path confusion.
 
-    Returns a 1x4 tensor indicating which commands are present:
-    [remind_detected, task_detected, tasks_detected, meeting_detected]
+    Returns a 2D tensor indicating if any command syntax is detected:
+    [[0,0,1,0,0]] if any command detected, [[0,0,0,0,0]] otherwise
     """
 
     def __init__(self):
@@ -77,16 +77,22 @@ class DetectSyntaxInQueryLogic(BaseLogic):
             query: Input query string
 
         Returns:
-            torch.Tensor: 1x4 tensor [remind, task, tasks, meeting] where 1.0 = detected, 0.0 = not detected
+            torch.Tensor: 2D tensor [[0,0,1,0,0]] if any command detected, [[0,0,0,0,0]] otherwise
         """
         if not query or not isinstance(query, str):
-            return torch.tensor([0.0, 0.0, 0.0, 0.0], dtype=torch.float32)
+            return torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
 
         # Get command detection results
         command_results = self._detect_commands(query)
 
-        # Convert to tensor
-        result = torch.tensor(command_results, dtype=torch.float32)
+        # Check if any command is detected
+        has_any_command = any(r > 0 for r in command_results)
+
+        # Return appropriate tensor
+        if has_any_command:
+            result = torch.tensor([[0, 0, 1, 0, 0]], dtype=torch.float32)
+        else:
+            result = torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
 
         logger.debug(f"Query: '{query}' -> Command detection results: {command_results}")
         return result

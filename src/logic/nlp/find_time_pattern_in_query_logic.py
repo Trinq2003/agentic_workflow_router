@@ -73,7 +73,7 @@ class FindTimePatternInQueryLogic(BaseLogic):
 
             # Vietnamese temporal indicators for NLP
             self.temporal_indicators = [
-                'khi nào', 'lúc nào', 'thời gian', 'nhắc', 'lúc', 'bao lâu'
+                'khi nào', 'lúc nào', 'thời gian', 'lúc', 'bao lâu'
             ]
 
         elif self.language == "english":
@@ -233,10 +233,10 @@ class FindTimePatternInQueryLogic(BaseLogic):
             query: Input query string
 
         Returns:
-            torch.Tensor: Binary tensor [1] if time patterns detected, [0] otherwise
+            torch.Tensor: 2D tensor [[1,1,0,0,0]] if time patterns detected, [[0,0,0,0,0]] otherwise
         """
         if not query or not isinstance(query, str):
-            return torch.tensor([0], dtype=torch.float32)
+            return torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
 
         # Use parallel detection for optimization
         detection_results = self._parallel_detection(query)
@@ -245,7 +245,10 @@ class FindTimePatternInQueryLogic(BaseLogic):
         has_time_pattern = any(detection_results)
         logging.debug(f"Has time pattern: {has_time_pattern}")
         # Return tensor with result
-        result = torch.tensor([1.0], dtype=torch.float32) if has_time_pattern else torch.tensor([0.0], dtype=torch.float32)
+        if has_time_pattern:
+            result = torch.tensor([[1, 1, 0, 0, 0]], dtype=torch.float32)
+        else:
+            result = torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
 
         logger.debug(f"Query: '{query}' -> Time pattern detected: {has_time_pattern}")
         return result
