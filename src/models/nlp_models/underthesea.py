@@ -56,16 +56,48 @@ class UndertheseaModel(BaseNLPModel):
 
         try:
             ner_result = vi_ner(text)
+            # Format: [(word, pos_tag, chunk_tag, ner_tag), ...]
+            current_entity = None
+            current_start = -1
+
             for item in ner_result:
-                if isinstance(item, tuple) and len(item) == 2:
-                    word, label = item
-                    if label != 'O':  # Not 'Outside'
-                        entities.append({
-                            'text': word,
-                            'label': label,
-                            'start': text.find(word),
-                            'end': text.find(word) + len(word),
-                        })
+                if isinstance(item, tuple) and len(item) == 4:
+                    word, pos_tag, chunk_tag, ner_tag = item
+
+                    # Check if this is a named entity (not 'O')
+                    if ner_tag != 'O':
+                        # Extract entity type from BIO tag (B-PER -> PER, I-PER -> PER)
+                        entity_type = ner_tag.split('-')[-1] if '-' in ner_tag else ner_tag
+
+                        if ner_tag.startswith('B-'):  # Beginning of entity
+                            # Save previous entity if exists
+                            if current_entity:
+                                entities.append(current_entity)
+
+                            # Start new entity
+                            current_start = text.find(word)
+                            current_entity = {
+                                'text': word,
+                                'label': entity_type,
+                                'start': current_start,
+                                'end': current_start + len(word),
+                            }
+
+                        elif ner_tag.startswith('I-') and current_entity:  # Inside entity
+                            # Extend current entity
+                            current_entity['text'] += ' ' + word
+                            current_entity['end'] = text.find(word, current_entity['start']) + len(word)
+
+                    else:
+                        # Save previous entity when we hit non-entity
+                        if current_entity:
+                            entities.append(current_entity)
+                            current_entity = None
+
+            # Don't forget to save the last entity
+            if current_entity:
+                entities.append(current_entity)
+
         except Exception as e:
             logger.warning(f"Underthesea NER failed: {e}")
 
