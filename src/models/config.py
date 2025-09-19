@@ -18,7 +18,7 @@ class Language(Enum):
 @dataclass
 class NLPConfig:
     """Configuration for NLP processing."""
-    default_language: Language = Language.ENGLISH
+    default_language: Language = Language.VIETNAMESE
     auto_detect_language: bool = True
     max_text_length: int = 10000
     enable_caching: bool = True
