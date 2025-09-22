@@ -1,122 +1,45 @@
 version: '3.8'
 
 services:
-  # Main NetMind workflow application
-  netmind-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    container_name: netmind-workflow-app
-    volumes:
-      - ./data:/app/data:ro
-      - ./outputs:/app/outputs
-      - ./logs:/app/logs
+  # API Service
+  api:
+    profiles: ["prod"]
+    image: ${API_IMAGE:-netmind-workflow:latest}
+    container_name: netmind-workflow-api
     environment:
       - PYTHONPATH=/app/src
-      - DAGSTER_HOME=/app/.dagster
       - LOG_LEVEL=INFO
     networks:
       - netmind-network
-    depends_on:
-      - postgres-db
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.path.append('src'); from data.data_loader import create_default_dataloader; loader = create_default_dataloader(); print('OK')"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    ports:
+      - "${API_PORT:-8000}:8000"
 
-  # Dagster webserver for UI and job management
-  dagster-webserver:
+  # API Service for development (hot reload, bind mounts)
+  api-dev:
+    profiles: ["dev"]
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    container_name: netmind-dagster-webserver
-    command: dagster-webserver -h 0.0.0.0 -p 3000 -w dagster_workspace.yaml
-    ports:
-      - "3000:3000"
+    container_name: netmind-workflow-api-dev
+    command: uvicorn src.api.app:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - ./data:/app/data:ro
-      - ./outputs:/app/outputs
-      - ./logs:/app/logs
-      - ./.dagster:/app/.dagster
+      - .:/app
+      - /app/__pycache__
     environment:
       - PYTHONPATH=/app/src
-      - DAGSTER_HOME=/app/.dagster
-      - DAGSTER_PG_DB_HOST=postgres-db
-      - DAGSTER_PG_DB_PORT=5432
-      - DAGSTER_PG_DB_NAME=dagster
-      - DAGSTER_PG_DB_USER=dagster
-      - DAGSTER_PG_DB_PASSWORD=dagster_password
-    networks:
-      - netmind-network
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  # Dagster daemon for scheduled jobs and sensors
-  dagster-daemon:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    container_name: netmind-dagster-daemon
-    command: dagster-daemon run
-    volumes:
-      - ./data:/app/data:ro
-      - ./outputs:/app/outputs
-      - ./logs:/app/logs
-      - ./.dagster:/app/.dagster
-    environment:
-      - PYTHONPATH=/app/src
-      - DAGSTER_HOME=/app/.dagster
-      - DAGSTER_PG_DB_HOST=postgres-db
-      - DAGSTER_PG_DB_PORT=5432
-      - DAGSTER_PG_DB_NAME=dagster
-      - DAGSTER_PG_DB_USER=dagster
-      - DAGSTER_PG_DB_PASSWORD=dagster_password
-    networks:
-      - netmind-network
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # PostgreSQL database for Dagster metadata
-  postgres-db:
-    image: postgres:14-alpine
-    container_name: netmind-postgres
-    environment:
-      - POSTGRES_DB=dagster
-      - POSTGRES_USER=dagster
-      - POSTGRES_PASSWORD=dagster_password
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - LOG_LEVEL=DEBUG
+      - ENV=development
     ports:
-      - "5432:5432"
-    networks:
-      - netmind-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dagster -d dagster"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  # Redis for caching and job queuing (optional)
+      - "${API_PORT:-8000}:8000"
+      
   redis:
     image: redis:7-alpine
     container_name: netmind-redis
@@ -124,7 +47,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     networks:
       - netmind-network
     restart: unless-stopped
@@ -135,37 +58,11 @@ services:
       retries: 3
       start_period: 30s
 
-  # Optional: Jupyter notebook for data exploration
-  jupyter:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    container_name: netmind-jupyter
-    command: jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''
-    ports:
-      - "8888:8888"
-    volumes:
-      - ./notebooks:/app/notebooks
-      - ./data:/app/data:ro
-      - ./outputs:/app/outputs
-    environment:
-      - PYTHONPATH=/app/src
-    networks:
-      - netmind-network
-    depends_on:
-      - netmind-app
-    restart: unless-stopped
-    profiles:
-      - jupyter
-
 networks:
   netmind-network:
     driver: bridge
     name: netmind-network
 
 volumes:
-  postgres_data:
-    name: netmind-postgres-data
   redis_data:
     name: netmind-redis-data

@@ -1,6 +1,6 @@
 # NetMind Workflow
 
-A comprehensive data processing and analysis workflow system built with modern Python tools, featuring parallel processing, pandas DataFrame integration, and Dagster orchestration.
+A comprehensive data processing and analysis workflow system built with modern Python tools, featuring parallel processing, pandas DataFrame integration, and a simple FastAPI service.
 
 ## 🚀 Features
 
@@ -18,24 +18,20 @@ A comprehensive data processing and analysis workflow system built with modern P
 - Memory-efficient chunked processing
 - Comprehensive progress tracking and error handling
 
-### ✅ **Dagster Integration**
-- Asset-based data processing pipeline
-- Scheduled job execution
-- Web-based UI for monitoring and management
-- Event-driven processing with sensors
-- PostgreSQL metadata storage
+### ✅ **FastAPI Service**
+- Clean REST API to submit queries and get worker labels
+- Endpoints: `/health`, `/labels`, `/label`
 
 ### ✅ **Docker Containerization**
 - Multi-stage Docker builds for optimized images
-- Docker Compose orchestration for development and production
+- Single docker-compose.yml with dev profile for hot-reload
 - Health checks and proper service dependencies
-- Development and production configurations
+- Separate production compose using Docker Hub images
 
 ### ✅ **Job Scheduling System**
 - Flexible job scheduler with multiple execution modes
 - Task-based architecture for modular processing
 - Comprehensive monitoring and logging
-- Support for both Dagster and standalone execution
 
 ## 📊 Performance Results
 
@@ -85,17 +81,17 @@ src/
 # Clone and navigate to the project
 cd netmind-workflow
 
-# Start development environment
-./scripts/docker-run.sh start dev
+# Development (instant hot-reload, no rebuilds)
+make run-dev
 
-# Or for production
-./scripts/docker-run.sh start
+# Production (Docker Hub image via unified compose prod profile)
+API_IMAGE=your-dockerhub-user/netmind-workflow:tag make up-prod
 
 # View logs
-./scripts/docker-run.sh logs
+make logs
 
-# Stop services
-./scripts/docker-run.sh stop
+# Stop prod services
+make down-prod
 ```
 
 ### Manual Setup
@@ -176,14 +172,16 @@ print(f"Sentiment: {result.sentiment.get('compound', 0.0):.3f}")
 python nlp_demo.py
 ```
 
-### **Dagster NLP Integration**
-```python
-# NLP assets available in Dagster:
-# - nlp_processor: Initialize NLP processor
-# - nlp_text_analysis: Comprehensive text analysis
-# - nlp_sentiment_analysis: Sentiment analysis
-# - nlp_entity_extraction: Named entity extraction
-# - nlp_comprehensive_report: Combined NLP analysis report
+### **API Usage**
+```bash
+# Health
+curl http://localhost:8000/health
+
+# List labels
+curl http://localhost:8000/labels
+
+# Label a query
+curl -X POST http://localhost:8000/label -H 'Content-Type: application/json' -d '{"query":"/task finish report by tomorrow"}'
 ```
 
 ## 📈 DataLoader pandas Integration Examples
@@ -240,47 +238,23 @@ print(f"Success rate: {result.metadata['success_rate']:.2f}")
 print(f"Items/second: {result.metadata['items_per_second']:.0f}")
 ```
 
-## 🔧 Dagster Integration
-
-### Start Dagster Services
-
-```bash
-# Start Dagster webserver
-dagster-webserver -h 0.0.0.0 -p 3000 -w dagster_workspace.yaml
-
-# In another terminal, start daemon
-dagster-daemon run
-```
-
-### Access Dagster UI
-- **Web UI**: http://localhost:3000
-- **Jupyter Notebook**: http://localhost:8888 (dev mode)
-
-### Available Dagster Assets
-- `raw_netmind_data`: Raw Excel data loading
-- `cleaned_netmind_data`: Data cleaning and preprocessing
-- `processed_netmind_data`: Structured data processing
-- `domain_statistics`: Domain-level analytics
-- `worker_statistics`: Worker-level analytics
-- `data_quality_report`: Comprehensive quality metrics
+## 🔧 API Endpoints
+See FastAPI app at `src/api/app.py` for details: `/health`, `/labels`, `/label`.
 
 ## 🐳 Docker Services
 
 ### Development Environment
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+make run-dev
 ```
 
 ### Production Environment
 ```bash
-docker-compose up -d
+API_IMAGE=your-dockerhub-user/netmind-workflow:tag make up-prod
 ```
 
 ### Available Services
-- **netmind-app**: Main application
-- **dagster-webserver**: Dagster UI (http://localhost:3000)
-- **dagster-daemon**: Job scheduler
-- **postgres-db**: Metadata storage
+- **api** or **api-dev**: FastAPI service
 - **redis**: Caching (optional)
 - **jupyter**: Notebook environment (dev only)
 
@@ -289,9 +263,7 @@ docker-compose up -d
 ### **Core Dependencies**
 - Python 3.10+
 - pandas 2.0+
-- Dagster 1.5+
 - Docker & Docker Compose
-- PostgreSQL (for Dagster metadata)
 - Redis (optional, for caching)
 
 ### **NLP Dependencies**
@@ -353,7 +325,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ### Common Issues
 
 1. **Import Errors**: Ensure `PYTHONPATH` includes the `src` directory
-2. **Dagster Issues**: Check PostgreSQL connection and Dagster configuration
+2. **API Issues**: Check container logs with `make logs`
 3. **Memory Issues**: Reduce `chunk_size` in configuration
 4. **Performance Issues**: Adjust `max_workers` based on system resources
 
@@ -365,4 +337,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**Built with ❤️ using Python, pandas, Dagster, and Docker**
+**Built with ❤️ using Python, pandas, FastAPI, and Docker**

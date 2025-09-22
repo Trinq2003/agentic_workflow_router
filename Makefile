@@ -11,7 +11,7 @@ TEST_FILES := $(wildcard $(TEST_DIR)/test_*.py)
 TEST_NAMES := $(patsubst $(TEST_DIR)/test_%.py,%,$(TEST_FILES))
 
 .PHONY: help test test-all list-tests clean ensure-dirs \
-	$(addprefix test-,$(TEST_NAMES))
+	$(addprefix test-,$(TEST_NAMES)) run-dev up-prod down-prod logs
 
 ## Allow syntax: make test name1 name2 ...
 ifeq (test,$(firstword $(MAKECMDGOALS)))
@@ -30,6 +30,10 @@ help:
 	@echo "  make list-tests         List discoverable test names"
 	@echo "  make clean              Remove test artifacts (reports, logs, __pycache__)"
 	@echo "  make test clean         Run tests then clean artifacts"
+	@echo "  make run-dev            Start dev API (hot-reload) via docker-compose.dev.yml"
+	@echo "  make up-prod            Start prod API (no code mount) via docker-compose.yml"
+	@echo "  make down-prod          Stop prod services"
+	@echo "  make logs               Tail API logs"
 	@echo ""
 	@echo "Available tests: $(TEST_NAMES)"
 
@@ -117,3 +121,17 @@ ifdef GOALS
 	@echo "TESTS: $(TESTS)"
 	@echo "DO_CLEAN: $(DO_CLEAN)"
 endif
+
+dev-up:
+	docker compose --profile dev up -d
+dev-down:
+	docker compose --profile dev down
+dev-logs:
+	docker compose --profile dev logs -f
+
+prod-up:
+	docker compose --profile prod up -d
+prod-down:
+	docker compose --profile prod down
+prod-logs:
+	docker compose --profile prod logs -f

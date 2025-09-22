@@ -1,5 +1,5 @@
 def main():
-    print("Hello from netmind-workflow!")
+    print("NetMind Workflow CLI - start API via docker-compose or uvicorn.")
 
 
 if __name__ == "__main__":
