@@ -1,7 +1,7 @@
 from typing import List, Any
 from strategy.base_classes import BaseStrategy
 import logging
-import torch
+import numpy as np
 import yaml
 from pathlib import Path
 from logic.nlp import DetectSyntaxInQueryLogic, FindTimePatternInQueryLogic, DetectHumanFeatureInQueryLogic
@@ -44,8 +44,8 @@ class WorkerLabelingNLPStrategy(BaseStrategy):
         logger.debug(f"[WorkerLabelingNLPStrategy] Starting reduction with {len(results)} logic results")
 
         if not results:
-            logger.debug(f"[WorkerLabelingNLPStrategy] No results to reduce, returning zero tensor")
-            return torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
+            logger.debug(f"[WorkerLabelingNLPStrategy] No results to reduce, returning zero vector")
+            return np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
 
         try:
             # Log individual logic contributions
@@ -53,28 +53,28 @@ class WorkerLabelingNLPStrategy(BaseStrategy):
             for i, (logic_name, result) in enumerate(zip(logic_names, results)):
                 logger.debug(f"[WorkerLabelingNLPStrategy] {logic_name} contribution: {result.tolist()}")
 
-            # Sum all tensors to get vote counts
-            summed_result = torch.zeros_like(results[0])
+            # Sum all vectors to get vote counts
+            summed_result = np.zeros_like(results[0])
             for result in results:
                 summed_result = summed_result + result
 
             logger.debug(f"[WorkerLabelingNLPStrategy] Summed vote counts: {summed_result.tolist()}")
 
             # Find the maximum vote count
-            max_votes = torch.max(summed_result)
-            logger.debug(f"[WorkerLabelingNLPStrategy] Maximum vote count: {max_votes.item()}")
+            max_votes = np.max(summed_result)
+            logger.debug(f"[WorkerLabelingNLPStrategy] Maximum vote count: {float(max_votes)}")
 
-            # Create output tensor: 1 where vote count equals max_votes, 0 otherwise
-            if max_votes.item() == 0:
-                logger.debug(f"[WorkerLabelingNLPStrategy] No max votes, returning zero tensor")
-                return torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
+            # Create output vector: 1 where vote count equals max_votes, 0 otherwise
+            if float(max_votes) == 0.0:
+                logger.debug(f"[WorkerLabelingNLPStrategy] No max votes, returning zero vector")
+                return np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
 
-            vote_result = torch.where(summed_result == max_votes, torch.tensor(1.0), torch.tensor(0.0))
+            vote_result = (summed_result == max_votes).astype(np.float32)
 
             # Log which workers were selected
             selected_workers = [self.workers[i] for i in range(len(vote_result[0])) if vote_result[0][i] == 1]
             logger.debug(f"[WorkerLabelingNLPStrategy] Selected workers: {selected_workers}")
-            logger.debug(f"[WorkerLabelingNLPStrategy] Final output tensor: {vote_result.tolist()}")
+            logger.debug(f"[WorkerLabelingNLPStrategy] Final output vector: {vote_result.tolist()}")
 
             return vote_result
         except Exception as e:

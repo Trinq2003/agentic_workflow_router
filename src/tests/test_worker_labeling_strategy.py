@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from data.data_loader import DataLoader, DataLoaderConfig, QueryData
 from strategy import NLPStrategy
-import torch
+import numpy as np
 
 # Configure logging with file output for detailed debugging
 import os
@@ -89,10 +89,10 @@ def get_first_n_queries(data_loader: DataLoader, n: int = 20) -> List[QueryData]
     return all_queries[:n]
 
 
-def analyze_strategy_output(output: torch.Tensor, workers: List[str]) -> Dict[str, Any]:
+def analyze_strategy_output(output, workers: List[str]) -> Dict[str, Any]:
     """Analyze the strategy output tensor."""
-    # Convert tensor to list for easier processing
-    output_list = output.squeeze().tolist()
+    # Convert vector to list for easier processing
+    output_list = np.squeeze(output).tolist()
 
     selected_workers = []
     selected_indices = []

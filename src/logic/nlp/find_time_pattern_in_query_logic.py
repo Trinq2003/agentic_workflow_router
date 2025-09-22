@@ -1,6 +1,6 @@
 from logic.base_classes import BaseLogic
 from models import nlp_processor
-import torch
+import numpy as np
 import re
 from typing import List, Dict, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -216,7 +216,7 @@ class FindTimePatternInQueryLogic(BaseLogic):
                     results.append(False)
         return results
 
-    def forward(self, query: str) -> torch.Tensor:
+    def forward(self, query: str):
         """
         Detect if the query contains time patterns.
 
@@ -224,13 +224,13 @@ class FindTimePatternInQueryLogic(BaseLogic):
             query: Input query string
 
         Returns:
-            torch.Tensor: 2D tensor [[0.5,0.5,0,0,0]] if time patterns detected, [[0,0,0,0,0]] otherwise
+            Vector: [[0.5,0.5,0,0,0]] if time patterns detected, [[0,0,0,0,0]] otherwise
         """
         logger.debug(f"[FindTimePatternInQueryLogic] Processing query: '{query}'")
 
         if not query or not isinstance(query, str):
-            logger.debug(f"[FindTimePatternInQueryLogic] Invalid input, returning zero tensor")
-            return torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
+            logger.debug(f"[FindTimePatternInQueryLogic] Invalid input, returning zero vector")
+            return np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
 
         # Use parallel detection for optimization
         detection_results = self._parallel_detection(query)
@@ -248,12 +248,12 @@ class FindTimePatternInQueryLogic(BaseLogic):
 
         # Return tensor with result
         if has_time_pattern:
-            result = torch.tensor([[0.5, 0.5, 0, 0, 0]], dtype=torch.float32)
-            logger.debug(f"[FindTimePatternInQueryLogic] Output tensor: {result.tolist()} (time patterns detected)")
+            result = np.array([[0.5, 0.5, 0, 0, 0]], dtype=np.float32)
+            logger.debug(f"[FindTimePatternInQueryLogic] Output vector: {result.tolist()} (time patterns detected)")
         else:
-            result = torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
-            logger.debug(f"[FindTimePatternInQueryLogic] Output tensor: {result.tolist()} (no time patterns detected)")
+            result = np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
+            logger.debug(f"[FindTimePatternInQueryLogic] Output vector: {result.tolist()} (no time patterns detected)")
 
-        logger.debug(f"[FindTimePatternInQueryLogic] Final contribution - Query: '{query}' -> Detection methods: Regex={regex_detected}, Keywords={keywords_detected}, NLP={nlp_detected} -> Tensor: {result.tolist()}")
+        logger.debug(f"[FindTimePatternInQueryLogic] Final contribution - Query: '{query}' -> Detection methods: Regex={regex_detected}, Keywords={keywords_detected}, NLP={nlp_detected} -> Vector: {result.tolist()}")
         return result
         

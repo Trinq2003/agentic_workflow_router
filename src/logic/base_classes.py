@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
-import torch
+import numpy as np
 
 from base_classes import BaseQueryProcessingClass
 
@@ -12,14 +12,14 @@ class BaseLogic(BaseQueryProcessingClass):
         super().__init__()
 
     @abstractmethod
-    def forward(self, query: str) -> torch.Tensor:
+    def forward(self, query: str) -> Any:
         """
-        Abstract method that processes a query and returns a tensor output.
+        Abstract method that processes a query and returns a vector output.
 
         Args:
             query: Input query to be processed
 
         Returns:
-            torch.Tensor: Output tensor from processing the query
+            Any: Output vector (e.g., numpy array) from processing the query
         """
         pass

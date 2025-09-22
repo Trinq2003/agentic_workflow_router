@@ -1,5 +1,5 @@
 from logic.base_classes import BaseLogic
-import torch
+import numpy as np
 import re
 from typing import List
 import logging
@@ -63,7 +63,7 @@ class DetectSyntaxInQueryLogic(BaseLogic):
 
         return results
 
-    def forward(self, query: str) -> torch.Tensor:
+    def forward(self, query: str):
         """
         Detect which command syntax patterns are present in the query.
 
@@ -71,13 +71,13 @@ class DetectSyntaxInQueryLogic(BaseLogic):
             query: Input query string
 
         Returns:
-            torch.Tensor: 2D tensor [[0,0,1,0,0]] if any command detected, [[0,0,0,0,0]] otherwise
+            Vector: [[0,0,1,0,0]] if any command detected, [[0,0,0,0,0]] otherwise
         """
         logger.debug(f"[DetectSyntaxInQueryLogic] Processing query: '{query}'")
 
         if not query or not isinstance(query, str):
-            logger.debug(f"[DetectSyntaxInQueryLogic] Invalid input, returning zero tensor")
-            return torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
+            logger.debug(f"[DetectSyntaxInQueryLogic] Invalid input, returning zero vector")
+            return np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
 
         # Get command detection results
         command_results = self._detect_commands(query)
@@ -94,11 +94,11 @@ class DetectSyntaxInQueryLogic(BaseLogic):
 
         # Return appropriate tensor
         if has_any_command:
-            result = torch.tensor([[0, 0, 1, 0, 0]], dtype=torch.float32)
-            logger.debug(f"[DetectSyntaxInQueryLogic] Output tensor: {result.tolist()} (commands detected)")
+            result = np.array([[0, 0, 1, 0, 0]], dtype=np.float32)
+            logger.debug(f"[DetectSyntaxInQueryLogic] Output vector: {result.tolist()} (commands detected)")
         else:
-            result = torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
-            logger.debug(f"[DetectSyntaxInQueryLogic] Output tensor: {result.tolist()} (no commands detected)")
+            result = np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
+            logger.debug(f"[DetectSyntaxInQueryLogic] Output vector: {result.tolist()} (no commands detected)")
 
-        logger.debug(f"[DetectSyntaxInQueryLogic] Final contribution - Query: '{query}' -> Commands: {detected_commands} -> Tensor: {result.tolist()}")
+        logger.debug(f"[DetectSyntaxInQueryLogic] Final contribution - Query: '{query}' -> Commands: {detected_commands} -> Vector: {result.tolist()}")
         return result

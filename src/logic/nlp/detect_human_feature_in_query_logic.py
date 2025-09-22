@@ -1,6 +1,6 @@
 from logic.base_classes import BaseLogic
 from models import nlp_processor
-import torch
+import numpy as np
 import re
 from typing import List, Dict, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -110,7 +110,7 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
 
         return results
 
-    def forward(self, query: str) -> torch.Tensor:
+    def forward(self, query: str):
         """
         Detect human-related features in the query.
 
@@ -118,13 +118,13 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
             query: Input query string
 
         Returns:
-            torch.Tensor: 2D tensor [[0,0,0,1,0]] if human features detected, [[0,0,0,0,0]] otherwise
+            Vector: [[0,0,0,1,0]] if human features detected, [[0,0,0,0,0]] otherwise
         """
         logger.debug(f"[DetectHumanFeatureInQueryLogic] Processing query: '{query}'")
 
         if not query or not isinstance(query, str):
-            logger.debug(f"[DetectHumanFeatureInQueryLogic] Invalid input, returning zero tensor")
-            return torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
+            logger.debug(f"[DetectHumanFeatureInQueryLogic] Invalid input, returning zero vector")
+            return np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
 
         # Use parallel detection for optimization
         detection_results = self._parallel_detection(query)
@@ -152,12 +152,12 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
 
         # Return tensor with result
         if has_human_feature:
-            result = torch.tensor([[0, 0, 0, 1, 0]], dtype=torch.float32)
-            logger.debug(f"[DetectHumanFeatureInQueryLogic] Output tensor: {result.tolist()} (human features detected)")
+            result = np.array([[0, 0, 0, 1, 0]], dtype=np.float32)
+            logger.debug(f"[DetectHumanFeatureInQueryLogic] Output vector: {result.tolist()} (human features detected)")
         else:
-            result = torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
-            logger.debug(f"[DetectHumanFeatureInQueryLogic] Output tensor: {result.tolist()} (no human features detected)")
+            result = np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
+            logger.debug(f"[DetectHumanFeatureInQueryLogic] Output vector: {result.tolist()} (no human features detected)")
 
-        logger.debug(f"[DetectHumanFeatureInQueryLogic] Final contribution - Query: '{query}' -> Features: {detected_features} -> Tensor: {result.tolist()}")
+        logger.debug(f"[DetectHumanFeatureInQueryLogic] Final contribution - Query: '{query}' -> Features: {detected_features} -> Vector: {result.tolist()}")
         return result
         
