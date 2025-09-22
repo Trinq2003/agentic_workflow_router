@@ -1,0 +1,6 @@
+workers:
+  - "FUNCTION_CALLING"
+  - "DOC_SEARCH"
+  - "REMINDER"
+  - "NETMIND_INFOR"
+  - "STAFF_INFOR"

@@ -16,7 +16,12 @@ class BaseStrategy(BaseQueryProcessingClass):
 
     def add_logic(self, logic: BaseLogic):
         self.logics.append(logic)
-        
+
+    @abstractmethod
+    def _load_labels(self) -> List[str]:
+        """Load labels for this strategy. To be implemented by child classes."""
+        pass
+
     @abstractmethod
     def _reduce(self, results: List[Any]) -> Any:
         pass
