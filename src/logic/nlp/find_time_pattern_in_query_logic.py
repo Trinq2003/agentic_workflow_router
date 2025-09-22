@@ -153,9 +153,7 @@ class FindTimePatternInQueryLogic(BaseLogic):
         # Check regex patterns
         for pattern in self.time_patterns:
             if re.search(pattern, query_lower, re.IGNORECASE):
-                logging.debug(f"Regex pattern {pattern} found in query: {query}")
                 return True
-        logging.debug(f"No regex pattern found in query: {query}")
         return False
 
     def _detect_keywords(self, query: str) -> bool:
@@ -166,16 +164,13 @@ class FindTimePatternInQueryLogic(BaseLogic):
         for category in self.time_keywords.values():
             for keyword in category:
                 if keyword in query_lower:
-                    logging.debug(f"Keyword \'{keyword}\' found in query: {query}")
                     return True
 
-        logging.debug(f"No keyword found in query: {query}")
         return False
 
     def _detect_nlp_entities(self, query: str) -> bool:
         """Detect time entities using NLP."""
         if not self.nlp_processor:
-            logging.debug(f"NLP processor not found in query: {query}")
             return False
 
         try:
@@ -188,7 +183,6 @@ class FindTimePatternInQueryLogic(BaseLogic):
                 for entity in analysis.entities:
                     entity_type = entity.get('type', '').upper()
                     if any(keyword in entity_type for keyword in ['DATE', 'TIME', 'TEMPORAL', 'EVENT']):
-                        logging.debug(f"Entity \'{entity_type}\' found in query: {query}")
                         return True
 
             # Check if the query contains temporal keywords based on NLP analysis
@@ -197,12 +191,10 @@ class FindTimePatternInQueryLogic(BaseLogic):
             # Use language-specific temporal indicators
             for indicator in self.temporal_indicators:
                 if indicator in text_lower:
-                    logging.debug(f"Temporal indicator \'{indicator}\' found in query: {query}")
                     return True
 
         except Exception as e:
-            logger.warning(f"NLP entity detection failed: {e}")
-        logging.debug(f"No NLP entity found in query: {query}")
+            logger.warning(f"NLP entity detection failed: {e}") 
         return False
 
     def _parallel_detection(self, query: str) -> List[bool]:
@@ -222,7 +214,6 @@ class FindTimePatternInQueryLogic(BaseLogic):
                 except Exception as e:
                     logger.warning(f"Detection method failed: {e}")
                     results.append(False)
-        logging.debug(f"Detection results: {results}")
         return results
 
     def forward(self, query: str) -> torch.Tensor:
@@ -233,23 +224,36 @@ class FindTimePatternInQueryLogic(BaseLogic):
             query: Input query string
 
         Returns:
-            torch.Tensor: 2D tensor [[1,1,0,0,0]] if time patterns detected, [[0,0,0,0,0]] otherwise
+            torch.Tensor: 2D tensor [[0.5,0.5,0,0,0]] if time patterns detected, [[0,0,0,0,0]] otherwise
         """
+        logger.debug(f"[FindTimePatternInQueryLogic] Processing query: '{query}'")
+
         if not query or not isinstance(query, str):
+            logger.debug(f"[FindTimePatternInQueryLogic] Invalid input, returning zero tensor")
             return torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
 
         # Use parallel detection for optimization
         detection_results = self._parallel_detection(query)
+        logger.debug(f"[FindTimePatternInQueryLogic] Parallel detection results: {detection_results}")
+
+        # Break down detection results
+        regex_detected, keywords_detected, nlp_detected = detection_results
+        logger.debug(f"[FindTimePatternInQueryLogic] Regex patterns detected: {regex_detected}")
+        logger.debug(f"[FindTimePatternInQueryLogic] Keywords detected: {keywords_detected}")
+        logger.debug(f"[FindTimePatternInQueryLogic] NLP entities detected: {nlp_detected}")
 
         # If any detection method found time patterns, return 1
         has_time_pattern = any(detection_results)
-        logging.debug(f"Has time pattern: {has_time_pattern}")
+        logger.debug(f"[FindTimePatternInQueryLogic] Any time pattern detected: {has_time_pattern}")
+
         # Return tensor with result
         if has_time_pattern:
             result = torch.tensor([[0.5, 0.5, 0, 0, 0]], dtype=torch.float32)
+            logger.debug(f"[FindTimePatternInQueryLogic] Output tensor: {result.tolist()} (time patterns detected)")
         else:
             result = torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
+            logger.debug(f"[FindTimePatternInQueryLogic] Output tensor: {result.tolist()} (no time patterns detected)")
 
-        logger.debug(f"Query: '{query}' -> Time pattern detected: {has_time_pattern}")
+        logger.debug(f"[FindTimePatternInQueryLogic] Final contribution - Query: '{query}' -> Detection methods: Regex={regex_detected}, Keywords={keywords_detected}, NLP={nlp_detected} -> Tensor: {result.tolist()}")
         return result
         

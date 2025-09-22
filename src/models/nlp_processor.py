@@ -143,7 +143,6 @@ class NLPProcessor:
 
         # Clean text
         cleaned_text = self.text_preprocessor.clean_text(text)
-        logger.debug(f"Cleaned text: Original: {text} -> Cleaned: {cleaned_text}")
 
         # Detect language
         if self.config.auto_detect_language:
@@ -227,7 +226,6 @@ class NLPProcessor:
 
         # Basic processing
         cleaned_text = self.text_preprocessor.clean_text(text)
-        logger.debug(f"Cleaned text: Original: {text} -> Cleaned: {cleaned_text}")
 
         # Detect language
         if self.config.auto_detect_language:

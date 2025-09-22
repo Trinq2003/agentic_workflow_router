@@ -59,13 +59,7 @@ class DetectSyntaxInQueryLogic(BaseLogic):
                 # Look for the pattern between whitespaces
                 if f" {pattern} " in padded_query:
                     results[i] = 1.0
-                    logging.debug(f"Command pattern '{pattern}' found in query: {query}")
                     break  # Found this command, no need to check other separators
-
-        if any(r > 0 for r in results):
-            logging.debug(f"Command patterns found in query: {query} -> {results}")
-        else:
-            logging.debug(f"No command patterns found in query: {query}")
 
         return results
 
@@ -79,20 +73,32 @@ class DetectSyntaxInQueryLogic(BaseLogic):
         Returns:
             torch.Tensor: 2D tensor [[0,0,1,0,0]] if any command detected, [[0,0,0,0,0]] otherwise
         """
+        logger.debug(f"[DetectSyntaxInQueryLogic] Processing query: '{query}'")
+
         if not query or not isinstance(query, str):
+            logger.debug(f"[DetectSyntaxInQueryLogic] Invalid input, returning zero tensor")
             return torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
 
         # Get command detection results
         command_results = self._detect_commands(query)
+        logger.debug(f"[DetectSyntaxInQueryLogic] Command detection results: {command_results}")
 
         # Check if any command is detected
         has_any_command = any(r > 0 for r in command_results)
+        logger.debug(f"[DetectSyntaxInQueryLogic] Any command detected: {has_any_command}")
+
+        # Create contribution mapping for this logic
+        command_names = ['remind', 'task', 'tasks', 'meeting']
+        detected_commands = [cmd for cmd, detected in zip(command_names, command_results) if detected > 0]
+        logger.debug(f"[DetectSyntaxInQueryLogic] Detected commands: {detected_commands}")
 
         # Return appropriate tensor
         if has_any_command:
             result = torch.tensor([[0, 0, 1, 0, 0]], dtype=torch.float32)
+            logger.debug(f"[DetectSyntaxInQueryLogic] Output tensor: {result.tolist()} (commands detected)")
         else:
             result = torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
+            logger.debug(f"[DetectSyntaxInQueryLogic] Output tensor: {result.tolist()} (no commands detected)")
 
-        logger.debug(f"Query: '{query}' -> Command detection results: {command_results}")
+        logger.debug(f"[DetectSyntaxInQueryLogic] Final contribution - Query: '{query}' -> Commands: {detected_commands} -> Tensor: {result.tolist()}")
         return result

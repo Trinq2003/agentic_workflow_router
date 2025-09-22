@@ -38,15 +38,12 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
         try:
             # Use comprehensive analysis to detect entities
             analysis = self.nlp_processor.analyze_text_comprehensive(query)
-            logger.debug(f"NLP analysis: {analysis}")
 
             # Check for person entities
             if analysis.entities:
-                logger.debug(f"NLP entities: {analysis.entities}")
                 for entity in analysis.entities:
                     entity_type = entity.get('label', '').upper()
                     if any(keyword in entity_type for keyword in ['PERSON', 'PER', 'HUMAN']):
-                        logger.debug(f"Human name entity found: {entity}")
                         return True
 
         except Exception as e:
@@ -64,10 +61,8 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
             # Check if it's within the valid range (000000-999999)
             user_id = int(match)
             if 0 <= user_id <= 999999:
-                logger.debug(f"Valid user ID found: {match}")
                 return True
-        
-        logger.debug(f"Valid user ID found: {match}")
+
         return False
 
     def _detect_username(self, query: str) -> bool:
@@ -77,7 +72,6 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
         for kw in self.nlp_processor.analyze_text_comprehensive(query).keywords:
             # Check if it follows the encoding pattern
             if self._is_valid_username_encoding(kw):
-                logger.debug(f"Valid username encoding found: {kw}")
                 return True
 
         return False
@@ -92,10 +86,8 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
 
         # Check if username matches the pattern
         if re.match(pattern, username_lower):
-            logger.debug(f"Valid username encoding found: {username}")
             return True
-
-        logger.debug(f"Invalid username encoding: {username}")
+        
         return False
 
     def _parallel_detection(self, query: str) -> List[bool]:
@@ -116,7 +108,6 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
                     logger.warning(f"Detection method failed: {e}")
                     results.append(False)
 
-        logger.debug(f"Human feature detection results: {results}")
         return results
 
     def forward(self, query: str) -> torch.Tensor:
@@ -129,22 +120,44 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
         Returns:
             torch.Tensor: 2D tensor [[0,0,0,1,0]] if human features detected, [[0,0,0,0,0]] otherwise
         """
+        logger.debug(f"[DetectHumanFeatureInQueryLogic] Processing query: '{query}'")
+
         if not query or not isinstance(query, str):
+            logger.debug(f"[DetectHumanFeatureInQueryLogic] Invalid input, returning zero tensor")
             return torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
 
         # Use parallel detection for optimization
         detection_results = self._parallel_detection(query)
+        logger.debug(f"[DetectHumanFeatureInQueryLogic] Parallel detection results: {detection_results}")
+
+        # Break down detection results
+        human_name_detected, user_id_detected, username_detected = detection_results
+        logger.debug(f"[DetectHumanFeatureInQueryLogic] Human names detected: {human_name_detected}")
+        logger.debug(f"[DetectHumanFeatureInQueryLogic] User IDs detected: {user_id_detected}")
+        logger.debug(f"[DetectHumanFeatureInQueryLogic] Usernames detected: {username_detected}")
 
         # If any human feature detected, return 1 at position 3
         has_human_feature = any(detection_results)
-        logger.debug(f"Has human feature: {has_human_feature}")
+        logger.debug(f"[DetectHumanFeatureInQueryLogic] Any human feature detected: {has_human_feature}")
+
+        # Create contribution mapping for this logic
+        detected_features = []
+        if human_name_detected:
+            detected_features.append("human_name")
+        if user_id_detected:
+            detected_features.append("user_id")
+        if username_detected:
+            detected_features.append("username")
+        logger.debug(f"[DetectHumanFeatureInQueryLogic] Detected human features: {detected_features}")
 
         # Return tensor with result
         if has_human_feature:
             result = torch.tensor([[0, 0, 0, 1, 0]], dtype=torch.float32)
+            logger.debug(f"[DetectHumanFeatureInQueryLogic] Output tensor: {result.tolist()} (human features detected)")
         else:
             result = torch.tensor([[0, 0, 0, 0, 0]], dtype=torch.float32)
+            logger.debug(f"[DetectHumanFeatureInQueryLogic] Output tensor: {result.tolist()} (no human features detected)")
 
-        logger.debug(f"Query: '{query}' -> Human feature detected: {has_human_feature}")
+        logger.debug(f"[DetectHumanFeatureInQueryLogic] Final contribution - Query: '{query}' -> Features: {detected_features} -> Tensor: {result.tolist()}")
         return result
         
