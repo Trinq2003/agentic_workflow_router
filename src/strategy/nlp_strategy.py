@@ -4,7 +4,12 @@ import logging
 import numpy as np
 import yaml
 from pathlib import Path
-from logic.nlp import DetectSyntaxInQueryLogic, FindTimePatternInQueryLogic, DetectHumanFeatureInQueryLogic
+from logic.nlp import (
+    DetectSyntaxInQueryLogic, 
+    FindTimePatternInQueryLogic, 
+    DetectHumanFeatureInQueryLogic, 
+    FindLocationPatternInQueryLogic
+)
 logger = logging.getLogger(__name__)
 
 
@@ -14,7 +19,7 @@ class WorkerLabelingNLPStrategy(BaseStrategy):
         self.add_logic(DetectSyntaxInQueryLogic())
         self.add_logic(FindTimePatternInQueryLogic())
         self.add_logic(DetectHumanFeatureInQueryLogic())
-
+        self.add_logic(FindLocationPatternInQueryLogic())
         # Load workers configuration
         self.workers = self._load_labels()
 

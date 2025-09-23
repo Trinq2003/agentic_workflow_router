@@ -9,8 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
-# Data folder
+# Data
 /data/
+*.xlsx
 
 # Test result folder
 reports/test_result/
