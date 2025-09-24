@@ -351,7 +351,7 @@ def main():
         logger.info(f"Strategy loaded with workers: {strategy.workers}")
 
         # Get test data
-        test_queries = get_first_n_queries(data_loader, n=20)
+        test_queries = get_first_n_queries(data_loader, n=2000)
         logger.info(f"Loaded {len(test_queries)} test queries")
 
         # Run tests

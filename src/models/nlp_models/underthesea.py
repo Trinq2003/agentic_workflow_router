@@ -15,6 +15,13 @@ try:
 except ImportError:
     UNDERSEA_AVAILABLE = False
 
+# Try to import dependency parser separately to allow graceful fallback on older versions
+try:
+    from underthesea import dependency_parse as vi_dependency_parse
+    UNDERSEA_DEPENDENCY_AVAILABLE = True
+except Exception:
+    UNDERSEA_DEPENDENCY_AVAILABLE = False
+
 
 class UndertheseaModel(BaseNLPModel):
     """Underthesea NLP model implementation."""
@@ -120,11 +127,72 @@ class UndertheseaModel(BaseNLPModel):
             return {'compound': 0.0, 'pos': 0.0, 'neu': 1.0, 'neg': 0.0}
 
     def parse_dependencies(self, text: str) -> List[Dict[str, Any]]:
-        # underthesea doesn't provide dependency parsing
-        tokens = self.tokenize(text)
-        return [{
-            'text': token,
-            'head': '',
-            'dep': 'UNK',
-            'pos': 'UNK',
-        } for token in tokens]
+        """Dependency parsing using underthesea.dependency_parse.
+
+        Returns list of dicts with keys: text, head, dep, pos.
+        - head is mapped to the head token text (root -> token itself) for
+          consistency with spaCy implementation.
+        - pos is filled using underthesea.pos_tag when available; otherwise 'UNK'.
+        """
+        # Fallback if library or feature is unavailable
+        logger.debug(f"Underthesea dependency parsing result: {UNDERSEA_AVAILABLE} {UNDERSEA_DEPENDENCY_AVAILABLE}")
+        if not UNDERSEA_AVAILABLE or not UNDERSEA_DEPENDENCY_AVAILABLE:
+            tokens = self.tokenize(text)
+            return [{
+                'text': token,
+                'head': token,  # mimic spaCy behavior for root/self when unknown
+                'dep': 'UNK',
+                'pos': 'UNK',
+            } for token in tokens]
+
+        try:
+            dep_result = vi_dependency_parse(text)
+            logger.debug(f"Underthesea dependency parsing result: {dep_result}")
+            # Attempt to get POS tags; if it fails, we'll use UNK
+            try:
+                pos_tags = vi_pos_tag(text)
+            except Exception:
+                pos_tags = []
+
+            # Build mapping of index->pos using sequence alignment when lengths match
+            index_to_pos: List[str] = []
+            if isinstance(pos_tags, list) and len(pos_tags) == len(dep_result):
+                index_to_pos = [tag for (_, tag) in pos_tags]
+            else:
+                index_to_pos = ['UNK'] * len(dep_result)
+
+            dependencies: List[Dict[str, Any]] = []
+            # dep_result items look like: (token_text, head_index, dep_label)
+            # head_index is 1-based; 0 indicates root
+            for i, item in enumerate(dep_result):
+                try:
+                    token_text, head_index, dep_label = item
+                except Exception:
+                    # Unexpected format; skip item
+                    continue
+
+                if isinstance(head_index, int) and head_index > 0 and head_index <= len(dep_result):
+                    head_text = dep_result[head_index - 1][0]
+                else:
+                    # Root or invalid -> point to itself for consistency with spaCy
+                    head_text = token_text
+
+                pos_val = index_to_pos[i] if i < len(index_to_pos) else 'UNK'
+
+                dependencies.append({
+                    'text': token_text,
+                    'head': head_text,
+                    'dep': dep_label,
+                    'pos': pos_val,
+                })
+
+            return dependencies
+        except Exception as e:
+            logger.warning(f"Underthesea dependency parsing failed, falling back: {e}")
+            tokens = self.tokenize(text)
+            return [{
+                'text': token,
+                'head': token,
+                'dep': 'UNK',
+                'pos': 'UNK',
+            } for token in tokens]
