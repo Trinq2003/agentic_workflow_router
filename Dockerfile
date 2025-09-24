@@ -74,10 +74,8 @@ WORKDIR /app
 
 # Copy source code
 COPY src/ ./src/
+COPY config/ ./config/
 COPY main.py .
-
-# Copy data directory (if needed for containerized execution)
-COPY data/ ./data/
 
 # Run as root to allow runtime downloads of NLTK/Underthesea resources
 # Default user in this image is root; no USER directive needed
