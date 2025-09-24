@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Docker Run Script for NetMind Workflow
+# Docker Run Script for Agentic Router
 # Usage: ./scripts/docker-run.sh [command] [options]
 
 set -e
@@ -59,7 +59,7 @@ build() {
 # Start services
 start() {
     local target=${1:-runtime}
-    log_info "Starting NetMind Workflow services (target: $target)..."
+    log_info "Starting Agentic Router services (target: $target)..."
 
     if [ "$target" = "dev" ]; then
         docker-compose -f "$COMPOSE_FILE" -f "$DEV_COMPOSE_FILE" up -d
@@ -74,7 +74,7 @@ start() {
 
 # Stop services
 stop() {
-    log_info "Stopping NetMind Workflow services..."
+    log_info "Stopping Agentic Router services..."
     docker-compose -f "$COMPOSE_FILE" -f "$DEV_COMPOSE_FILE" down
     log_success "Services stopped successfully"
 }
@@ -82,7 +82,7 @@ stop() {
 # Restart services
 restart() {
     local target=${1:-runtime}
-    log_info "Restarting NetMind Workflow services..."
+    log_info "Restarting Agentic Router services..."
     stop
     sleep 2
     start "$target"
@@ -90,14 +90,14 @@ restart() {
 
 # View logs
 logs() {
-    local service=${1:-netmind-app}
+    local service=${1:-agentic-router-app}
     log_info "Showing logs for service: $service"
     docker-compose -f "$COMPOSE_FILE" -f "$DEV_COMPOSE_FILE" logs -f "$service"
 }
 
 # Execute command in container
 exec_cmd() {
-    local service=${1:-netmind-app}
+    local service=${1:-agentic-router-app}
     local command=${2:-bash}
     log_info "Executing command in $service container: $command"
     docker-compose -f "$COMPOSE_FILE" -f "$DEV_COMPOSE_FILE" exec "$service" $command
@@ -110,7 +110,7 @@ run_processing() {
 
     case $mode in
         parallel)
-            docker-compose -f "$COMPOSE_FILE" exec netmind-app \
+            docker-compose -f "$COMPOSE_FILE" exec agentic-router-app \
                 python -c "
 import sys
 sys.path.append('src')
@@ -121,7 +121,7 @@ print('Job completed with status:', result.success)
 "
             ;;
         sequential)
-            docker-compose -f "$COMPOSE_FILE" exec netmind-app \
+            docker-compose -f "$COMPOSE_FILE" exec agentic-router-app \
                 python -c "
 import sys
 sys.path.append('src')
@@ -141,7 +141,7 @@ print('Job completed with status:', result.success)
 # Run tests
 run_tests() {
     log_info "Running tests..."
-    docker-compose -f "$COMPOSE_FILE" -f "$DEV_COMPOSE_FILE" exec netmind-app \
+    docker-compose -f "$COMPOSE_FILE" -f "$DEV_COMPOSE_FILE" exec agentic-router-app \
         python -m pytest tests/ -v --cov=src --cov-report=html
 }
 
@@ -155,7 +155,7 @@ cleanup() {
 
 # Show status
 status() {
-    log_info "NetMind Workflow Status:"
+    log_info "Agentic Router Status:"
     echo ""
     docker-compose -f "$COMPOSE_FILE" -f "$DEV_COMPOSE_FILE" ps
     echo ""
@@ -166,7 +166,7 @@ status() {
 # Show help
 show_help() {
     cat << EOF
-NetMind Workflow Docker Management Script
+Agentic Router Docker Management Script
 
 USAGE:
     $0 [COMMAND] [OPTIONS]
@@ -185,7 +185,7 @@ COMMANDS:
     help                    Show this help message
 
 SERVICES:
-    netmind-app            Main application
+    agentic-router-app            Main application
     dagster-webserver      Dagster UI
     dagster-daemon         Dagster job scheduler
     postgres-db            PostgreSQL database
@@ -197,7 +197,7 @@ EXAMPLES:
     $0 start dev           # Start development environment
     $0 process parallel    # Run parallel data processing
     $0 logs dagster-webserver  # Show Dagster logs
-    $0 exec netmind-app python main.py  # Run main script
+    $0 exec agentic-router-app python main.py  # Run main script
 
 EOF
 }
@@ -220,10 +220,10 @@ main() {
             restart "${2:-runtime}"
             ;;
         logs)
-            logs "${2:-netmind-app}"
+            logs "${2:-agentic-router-app}"
             ;;
         exec)
-            exec_cmd "${2:-netmind-app}" "${3:-bash}"
+            exec_cmd "${2:-agentic-router-app}" "${3:-bash}"
             ;;
         process)
             run_processing "${2:-parallel}"

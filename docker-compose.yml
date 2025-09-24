@@ -4,13 +4,13 @@ services:
   # API Service
   api:
     profiles: ["prod"]
-    image: ${API_IMAGE:-netmind-workflow:latest}
-    container_name: netmind-workflow-api
+    image: ${API_IMAGE:-agentic-router:latest}
+    container_name: agentic-router-api
     environment:
       - PYTHONPATH=/app/src
       - LOG_LEVEL=INFO
     networks:
-      - netmind-network
+      - agentic-router-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -28,7 +28,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    container_name: netmind-workflow-api-dev
+    container_name: agentic-router-api-dev
     command: uvicorn src.api.app:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - .:/app
@@ -42,14 +42,14 @@ services:
       
   redis:
     image: redis:7-alpine
-    container_name: netmind-redis
+    container_name: agentic-router-redis
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
     ports:
       - "${REDIS_PORT:-6379}:6379"
     networks:
-      - netmind-network
+      - agentic-router-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -59,10 +59,10 @@ services:
       start_period: 30s
 
 networks:
-  netmind-network:
+  agentic-router-network:
     driver: bridge
-    name: netmind-network
+    name: agentic-router-network
 
 volumes:
   redis_data:
-    name: netmind-redis-data
+    name: agentic-router-redis-data

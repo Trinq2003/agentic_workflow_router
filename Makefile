@@ -6,12 +6,16 @@ TEST_DIR := src/tests
 REPORTS_DIR := reports/test_result
 LOGS_DIR := $(REPORTS_DIR)/logs
 
+# Image metadata derived from pyproject.toml
+IMAGE_NAME ?= $(shell $(PY) -c "import pathlib; d=pathlib.Path('pyproject.toml').read_text(encoding='utf-8'); q=chr(34); v=[(s:=l.strip()).split('=',1)[1].strip() for l in d.splitlines() if (s:=l.strip()).startswith('name')][0]; print(v[1:-1] if v and (v[0]==q or v[0]=='\'') and v[-1]==v[0] else v)")
+IMAGE_VERSION ?= $(shell $(PY) -c "import pathlib; d=pathlib.Path('pyproject.toml').read_text(encoding='utf-8'); q=chr(34); v=[(s:=l.strip()).split('=',1)[1].strip() for l in d.splitlines() if (s:=l.strip()).startswith('version')][0]; print(v[1:-1] if v and (v[0]==q or v[0]=='\'') and v[-1]==v[0] else v)")
+
 # Discover tests of the form src/tests/test_*.py
 TEST_FILES := $(wildcard $(TEST_DIR)/test_*.py)
 TEST_NAMES := $(patsubst $(TEST_DIR)/test_%.py,%,$(TEST_FILES))
 
 .PHONY: help test test-all list-tests clean ensure-dirs \
-	$(addprefix test-,$(TEST_NAMES)) run-dev up-prod down-prod logs
+	$(addprefix test-,$(TEST_NAMES)) run-dev up-prod down-prod logs prod-build
 
 ## Allow syntax: make test name1 name2 ...
 ifeq (test,$(firstword $(MAKECMDGOALS)))
@@ -34,6 +38,7 @@ help:
 	@echo "  make up-prod            Start prod API (no code mount) via docker-compose.yml"
 	@echo "  make down-prod          Stop prod services"
 	@echo "  make logs               Tail API logs"
+	@echo "  make prod-build         Build Docker image with version and latest tags"
 	@echo ""
 	@echo "Available tests: $(TEST_NAMES)"
 
@@ -128,6 +133,9 @@ dev-down:
 	docker compose --profile dev down
 dev-logs:
 	docker compose --profile dev logs -f
+
+prod-build:
+	docker build --target runtime -t $(IMAGE_NAME):$(IMAGE_VERSION) -t $(IMAGE_NAME):latest .
 
 prod-up:
 	docker compose --profile prod up -d
