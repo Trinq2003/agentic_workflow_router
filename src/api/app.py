@@ -17,6 +17,7 @@ class QueryRequest(BaseModel):
 
 class LabelsResponse(BaseModel):
     labels: List[str]
+    votes: List[float] | None = None
 
 
 app = FastAPI(title="NetMind Workflow API", version="0.1.0")
@@ -53,9 +54,21 @@ def label_query(payload: QueryRequest) -> LabelsResponse:
     try:
         result = strategy.forward(payload.query)
 
-        # If strategy already returns a list of worker names (new behavior)
+        # If strategy returns dict with labels and votes (new behavior)
+        if isinstance(result, dict) and "labels" in result and "votes" in result:
+            labels = result.get("labels", [])
+            votes = result.get("votes", [])
+            if not isinstance(labels, list) or not all(isinstance(x, str) for x in labels):
+                raise HTTPException(status_code=500, detail="Strategy returned invalid labels format")
+            try:
+                votes = [float(v) for v in votes]
+            except Exception:
+                raise HTTPException(status_code=500, detail="Strategy returned invalid votes format")
+            return LabelsResponse(labels=labels, votes=votes)
+
+        # If strategy already returns a list of worker names
         if isinstance(result, list) and all(isinstance(x, str) for x in result):
-            return LabelsResponse(labels=result)
+            return LabelsResponse(labels=result, votes=None)
 
         # Backward compatibility: handle numeric vote vectors
         vector_like = np.squeeze(result)
@@ -82,7 +95,8 @@ def label_query(payload: QueryRequest) -> LabelsResponse:
             selected_indices = [i for i, v in enumerate(numeric_vector) if v == max_val and max_val > 0.0]
 
         selected = [strategy.workers[i] for i in selected_indices if i < len(strategy.workers)]
-        return LabelsResponse(labels=selected)
+        selected_votes = [numeric_vector[i] for i in selected_indices if i < len(strategy.workers)]
+        return LabelsResponse(labels=selected, votes=selected_votes)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to process query: {exc}")
 

@@ -60,7 +60,7 @@ class TextPreprocessor:
         text = re.sub(r'\s+', ' ', text.strip())
 
         # Remove special characters but keep punctuation
-        text = re.sub(r'[^\w\s\.\,\!\?\:\;\-\'"]', '', text)
+        text = re.sub(r'[^\w\s\.\,\!\?\:\;\-\'\"\\\/]', '', text)
 
         return text
 
