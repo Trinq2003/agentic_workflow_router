@@ -1,9 +1,6 @@
 from logic.base_classes import BaseLogic
-from models import nlp_processor
 import numpy as np
 import re
-from typing import List, Dict, Any, Tuple
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 
 from logic.nlp.utils import is_known_location

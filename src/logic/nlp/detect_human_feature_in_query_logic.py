@@ -38,12 +38,14 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
         try:
             # Use comprehensive analysis to detect entities
             analysis = self.nlp_processor.analyze_text_comprehensive(query)
+            logger.debug(f"[DetectHumanFeatureInQueryLogic] Analysis: {analysis}")
 
             # Check for person entities
             if analysis.entities:
                 for entity in analysis.entities:
                     entity_type = entity.get('label', '').upper()
                     if any(keyword in entity_type for keyword in ['PERSON', 'PER', 'HUMAN']):
+                        logger.debug(f"[DetectHumanFeatureInQueryLogic] Found human name: {entity_type}")
                         return True
 
         except Exception as e:
