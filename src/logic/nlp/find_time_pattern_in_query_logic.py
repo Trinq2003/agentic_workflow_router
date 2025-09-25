@@ -218,19 +218,29 @@ class FindTimePatternInQueryLogic(BaseLogic):
 
     def forward(self, query: str):
         """
-        Detect if the query contains time patterns.
+        Detect time patterns and return tailored vectors for 8 workers.
+
+        Workers mapping:
+        0: FUNCTION_CALLER_AGENT
+        1: DOCS_SEARCHER_AGENT  
+        2: NETMIND_INFOR_AGENT
+        3: REGION_IDENTIFIER_AGENT
+        4: WEBS_SEARCHER_AGENT
+        5: TIME_IDENTIFIER_AGENT
+        6: EMPLOYEE_INFOR_AGENT
+        7: REMINDER_AGENT
 
         Args:
             query: Input query string
 
         Returns:
-            Vector: [[0.5,0.5,0,0,0]] if time patterns detected, [[0,0,0,0,0]] otherwise
+            Vector: Probability distribution over 8 workers based on time pattern detection
         """
         logger.debug(f"[FindTimePatternInQueryLogic] Processing query: '{query}'")
 
         if not query or not isinstance(query, str):
             logger.debug(f"[FindTimePatternInQueryLogic] Invalid input, returning zero vector")
-            return np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
+            return np.array([[0, 0, 0, 0, 0, 0, 0, 0]], dtype=np.float32)
 
         # Use parallel detection for optimization
         detection_results = self._parallel_detection(query)
@@ -242,17 +252,41 @@ class FindTimePatternInQueryLogic(BaseLogic):
         logger.debug(f"[FindTimePatternInQueryLogic] Keywords detected: {keywords_detected}")
         logger.debug(f"[FindTimePatternInQueryLogic] NLP entities detected: {nlp_detected}")
 
-        # If any detection method found time patterns, return 1
+        # Initialize result vector for 8 workers
+        result = np.array([[0, 0, 0, 0, 0, 0, 0, 0]], dtype=np.float32)
+
+        # If any detection method found time patterns
         has_time_pattern = any(detection_results)
         logger.debug(f"[FindTimePatternInQueryLogic] Any time pattern detected: {has_time_pattern}")
 
-        # Return tensor with result
         if has_time_pattern:
-            result = np.array([[0.5, 0.5, 0, 0, 0]], dtype=np.float32)
-            logger.debug(f"[FindTimePatternInQueryLogic] Output vector: {result.tolist()} (time patterns detected)")
+            # Time patterns detected - distribute weights based on detection methods
+            detected_methods = []
+            
+            if regex_detected:
+                detected_methods.append("regex")
+                result[0][5] += 0.8  # TIME_IDENTIFIER_AGENT (primary for time patterns)
+                result[0][7] += 0.2  # REMINDER_AGENT (time-based reminders)
+            
+            if keywords_detected:
+                detected_methods.append("keywords")
+                result[0][5] += 0.7  # TIME_IDENTIFIER_AGENT (time keywords)
+                result[0][7] += 0.3  # REMINDER_AGENT (scheduling/reminders)
+            
+            if nlp_detected:
+                detected_methods.append("nlp")
+                result[0][5] += 0.6  # TIME_IDENTIFIER_AGENT (NLP time entities)
+                result[0][1] += 0.4  # DOCS_SEARCHER_AGENT (contextual time info)
+
+            logger.debug(f"[FindTimePatternInQueryLogic] Time patterns detected via: {detected_methods}")
         else:
-            result = np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
-            logger.debug(f"[FindTimePatternInQueryLogic] Output vector: {result.tolist()} (no time patterns detected)")
+            # No time patterns detected - return zero vector
+            logger.debug(f"[FindTimePatternInQueryLogic] No time patterns detected -> zero vector")
+            return np.array([[0, 0, 0, 0, 0, 0, 0, 0]], dtype=np.float32)
+
+        # Normalize to ensure sum = 1
+        if np.sum(result) > 0:
+            result = result / np.sum(result)
 
         logger.debug(f"[FindTimePatternInQueryLogic] Final contribution - Query: '{query}' -> Detection methods: Regex={regex_detected}, Keywords={keywords_detected}, NLP={nlp_detected} -> Vector: {result.tolist()}")
         return result
