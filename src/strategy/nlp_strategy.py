@@ -10,6 +10,7 @@ from logic.nlp import (
     DetectHumanFeatureInQueryLogic, 
     FindLocationPatternInQueryLogic,
     DetectNumericalRequirementInQueryLogic,
+    DetectDocSearchFeatureInQueryLogic,
 )
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ class WorkerLabelingNLPStrategy(BaseStrategy):
         super().__init__()
         self.add_logic(DetectSyntaxInQueryLogic())
         self.add_logic(FindTimePatternInQueryLogic())
+        self.add_logic(DetectDocSearchFeatureInQueryLogic())
         self.add_logic(DetectHumanFeatureInQueryLogic())
         self.add_logic(FindLocationPatternInQueryLogic())
         self.add_logic(DetectNumericalRequirementInQueryLogic())
@@ -40,7 +42,8 @@ class WorkerLabelingNLPStrategy(BaseStrategy):
 
     def _reduce(self, results: List[Any]) -> List[str]:
         """
-        Implement vote-based ranking: sum tensors, then return workers sorted by vote counts.
+        Implement vote-based ranking: sum tensors, then return workers sorted by vote counts
+        along with their corresponding scores.
 
         Args:
             results: List of tensors from each logic's forward() method
@@ -93,7 +96,10 @@ class WorkerLabelingNLPStrategy(BaseStrategy):
             logger.debug(f"[WorkerLabelingNLPStrategy] Worker vote counts: {dict(worker_votes)}")
             logger.debug(f"[WorkerLabelingNLPStrategy] Workers sorted by votes: {sorted_workers}")
 
-            return sorted_workers
+            # Also return the corresponding votes in the same order
+            sorted_votes = [votes for _, votes in worker_votes]
+
+            return {"labels": sorted_workers, "votes": sorted_votes}
         except Exception as e:
             logger.error(f"[WorkerLabelingNLPStrategy] Error in vote-based reduction: {e}")
             raise
