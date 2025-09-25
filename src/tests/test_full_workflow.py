@@ -17,7 +17,7 @@ import requests
 import json
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import pandas as pd
 import multiprocessing as mp
@@ -307,21 +307,38 @@ def map_worker_labels(workers: List[str]) -> List[str]:
     return mapped_workers
 
 
-def extract_workers_from_api_response(api_response: Dict[str, Any]) -> List[str]:
+def extract_workers_and_scores_from_api_response(api_response: Dict[str, Any]) -> Tuple[List[str], List[float]]:
     """
-    Extract the top 2 predicted workers from the API response.
+    Extract the top 2 predicted workers and their confidence scores from the API response.
 
     Preference order (new _reduce output first):
-    1) labels/workers/predicted_workers/result: list[str] sorted by votes (take first 2)
-    2) prediction_vector/output_vector: numeric list (derive top 2 by votes)
+    1) labels + votes: take first 2 from both
+    2) labels/workers/predicted_workers/result: list[str] sorted by votes (take first 2), scores unknown
+    3) prediction_vector/output_vector: numeric list (derive top 2 by votes)
     """
     if not api_response.get("success", False):
-        return []
+        return [], []
 
     data = api_response.get("data", {})
 
-    # Prefer label lists first (new behavior: already sorted by votes)
-    possible_keys = ["labels", "workers", "predicted_workers", "result"]
+    # Prefer new dict form labels + votes
+    labels = data.get("labels")
+    votes = data.get("votes")
+    if isinstance(labels, list) and labels:
+        top_labels = labels[:2]
+        if isinstance(votes, list) and votes:
+            try:
+                top_votes = [float(v) for v in votes[:2]]
+            except Exception:
+                top_votes = []
+        else:
+            top_votes = []
+        mapped_workers = map_worker_labels(top_labels)
+        logger.debug(f"Labels+votes extraction: {top_labels} {top_votes} -> {mapped_workers}")
+        return mapped_workers, top_votes
+
+    # Fallback: label lists only (unknown scores)
+    possible_keys = ["workers", "predicted_workers", "result"]
     for key in possible_keys:
         if key in data:
             workers = data[key]
@@ -329,11 +346,11 @@ def extract_workers_from_api_response(api_response: Dict[str, Any]) -> List[str]
                 top_workers = workers[:2]
                 mapped_workers = map_worker_labels(top_workers)
                 logger.debug(f"Label-list extraction: {workers[:3]} -> {top_workers} -> {mapped_workers}")
-                return mapped_workers
+                return mapped_workers, []
             if isinstance(workers, str):
                 mapped_workers = map_worker_labels([workers])
                 logger.debug(f"Single worker extraction: {workers} -> {mapped_workers}")
-                return mapped_workers
+                return mapped_workers, []
 
     # Fallback: derive from numeric prediction vectors
     if "prediction_vector" in data or "output_vector" in data:
@@ -353,13 +370,15 @@ def extract_workers_from_api_response(api_response: Dict[str, Any]) -> List[str]
             except Exception:
                 logger.debug("Vector values not numeric; skipping vector-based extraction")
             else:
-                top_workers = [name for name, val in pairs[:2] if float(val) > 0]
+                top_pairs = [(name, float(val)) for name, val in pairs[:2] if float(val) > 0]
+                top_workers = [name for name, _ in top_pairs]
+                top_scores = [score for _, score in top_pairs]
                 mapped_workers = map_worker_labels(top_workers)
-                logger.debug(f"Vector-based extraction: {pairs[:3]} -> {top_workers} -> {mapped_workers}")
-                return mapped_workers
+                logger.debug(f"Vector-based extraction: {pairs[:3]} -> {top_pairs} -> {mapped_workers}")
+                return mapped_workers, top_scores
 
     logger.warning(f"Could not extract workers from API response: {data}")
-    return []
+    return [], []
 
 
 def calculate_accuracy_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -402,8 +421,9 @@ def calculate_accuracy_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         expected_mapped = map_worker_labels(expected_raw)
         expected = set(expected_mapped)
         
-        # Predicted workers are already mapped in extract_workers_from_api_response
-        predicted = set(result["predicted_workers"])
+        # Predicted workers (top-2) are already mapped in extract function
+        predicted_list = result.get("predicted_workers", [])
+        predicted = set(predicted_list)
         
         # Determine query category for analysis
         query_category = 'DOC_SEARCH' if 'DOC_SEARCH' in expected else \
@@ -414,13 +434,18 @@ def calculate_accuracy_metrics(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             category_stats[query_category] = {"total": 0, "exact": 0, "partial": 0}
         category_stats[query_category]["total"] += 1
         
-        # Exact match (all expected workers predicted)
-        if expected == predicted:
+        # New matching criteria:
+        # - Exact: first predicted label equals ground truth (primary expected)
+        # - Partial: ground truth is in top-2 predicted labels
+        ground_truth = expected_mapped[0] if expected_mapped else None
+        is_exact = bool(predicted_list) and ground_truth is not None and predicted_list[0] == ground_truth
+        is_partial = ground_truth is not None and ground_truth in predicted_list[:2]
+
+        if is_exact:
             exact_matches += 1
             category_stats[query_category]["exact"] += 1
-        
-        # Partial match (at least one expected worker predicted)
-        if len(expected.intersection(predicted)) > 0:
+
+        if is_partial:
             partial_matches += 1
             category_stats[query_category]["partial"] += 1
         
@@ -528,8 +553,8 @@ def process_query_batch(batch_data: Dict[str, Any]) -> Dict[str, Any]:
         api_time = api_response.get("execution_time", 0)
         total_api_time += api_time
         
-        # Extract predicted workers
-        predicted_workers = extract_workers_from_api_response(api_response)
+        # Extract predicted workers and scores
+        predicted_workers, predicted_scores = extract_workers_and_scores_from_api_response(api_response)
         
         end_time = time.time()
         total_execution_time = end_time - start_time
@@ -541,6 +566,7 @@ def process_query_batch(batch_data: Dict[str, Any]) -> Dict[str, Any]:
             "knowledge_domain": query_data.knowledge_domain,
             "expected_workers": query_data.workers,
             "predicted_workers": predicted_workers,
+            "predicted_workers_scores": predicted_scores,
             "api_success": api_response.get("success", False),
             "api_status_code": api_response.get("status_code"),
             "api_error": api_response.get("error"),
@@ -711,8 +737,8 @@ def run_full_workflow_test(queries: List[QueryData], api_client: APIClient) -> D
         api_time = api_response.get("execution_time", 0)
         total_api_time += api_time
         
-        # Extract predicted workers
-        predicted_workers = extract_workers_from_api_response(api_response)
+        # Extract predicted workers and scores
+        predicted_workers, predicted_scores = extract_workers_and_scores_from_api_response(api_response)
         
         end_time = time.time()
         total_execution_time = end_time - start_time
@@ -724,6 +750,7 @@ def run_full_workflow_test(queries: List[QueryData], api_client: APIClient) -> D
             "knowledge_domain": query_data.knowledge_domain,
             "expected_workers": query_data.workers,
             "predicted_workers": predicted_workers,
+            "predicted_workers_scores": predicted_scores,
             "api_success": api_response.get("success", False),
             "api_status_code": api_response.get("status_code"),
             "api_error": api_response.get("error"),
@@ -775,6 +802,7 @@ def save_results_to_csv(test_results: Dict[str, Any], base_filename: str = "full
             'expected_workers_raw',
             'expected_workers_mapped',
             'predicted_workers',
+            'predicted_workers_scores',
             'exact_match',
             'partial_match',
             'query_category',
@@ -793,16 +821,17 @@ def save_results_to_csv(test_results: Dict[str, Any], base_filename: str = "full
             # Apply mapping to expected workers for comparison
             expected_raw = result["expected_workers"]
             expected_mapped = map_worker_labels(expected_raw)
-            expected_set = set(expected_mapped)
-            predicted_set = set(result["predicted_workers"])
-            
-            exact_match = expected_set == predicted_set
-            partial_match = len(expected_set.intersection(predicted_set)) > 0
+            predicted_list = result.get("predicted_workers", [])
+
+            # New definitions for matches
+            gt = expected_mapped[0] if expected_mapped else None
+            exact_match = bool(predicted_list) and gt is not None and predicted_list[0] == gt
+            partial_match = gt is not None and gt in predicted_list[:2]
             
             # Determine query category
-            query_category = 'DOC_SEARCH' if 'DOC_SEARCH' in expected_set else \
-                            'FUNCTION_CALLING' if 'FUNCTION_CALLING' in expected_set else \
-                            'REMINDER' if ('REMINDER' in expected_set or 'MEETING' in expected_set) else 'OTHER'
+            query_category = 'DOC_SEARCH' if 'DOC_SEARCH' in expected_mapped else \
+                            'FUNCTION_CALLING' if 'FUNCTION_CALLING' in expected_mapped else \
+                            'REMINDER' if ('REMINDER' in expected_mapped or 'MEETING' in expected_mapped) else 'OTHER'
             
             row = {
                 'query_index': result["query_index"] + 1,
@@ -811,6 +840,9 @@ def save_results_to_csv(test_results: Dict[str, Any], base_filename: str = "full
                 'expected_workers_raw': "; ".join(expected_raw),
                 'expected_workers_mapped': "; ".join(expected_mapped),
                 'predicted_workers': "; ".join(result["predicted_workers"]),
+                'predicted_workers_scores': "; ".join(
+                    [f"{float(s):.6f}" for s in (result.get("predicted_workers_scores") or [])]
+                ),
                 'exact_match': exact_match,
                 'partial_match': partial_match,
                 'query_category': query_category,
@@ -986,7 +1018,7 @@ def main():
         
         # Create balanced sample: 400 DOC_SEARCH, 400 FUNCTION_CALLING, 200 REMINDER
         test_queries = create_balanced_sample(all_queries, 
-                                            doc_search_count=400,
+                                            doc_search_count=5000,
                                             function_calling_count=400, 
                                             reminder_count=200)
         logger.info(f"Using balanced sample with {len(test_queries)} queries")
