@@ -37,15 +37,23 @@ class BaseStrategy(BaseQueryProcessingClass):
             List[Any]: Final labeled output from processing the query
         """
         # Run all logic forward methods in parallel
-        results = []
+        results = [None] * len(self.logics)  # Pre-allocate results list to maintain order
         with ThreadPoolExecutor() as executor:
-            future_to_logic = {executor.submit(logic.forward, query): logic for logic in self.logics}
-            for future in as_completed(future_to_logic):
+            # Submit futures with their index to maintain order
+            future_to_index_logic = {
+                executor.submit(logic.forward, query): (i, logic) 
+                for i, logic in enumerate(self.logics)
+            }
+            
+            for future in as_completed(future_to_index_logic):
+                index, logic = future_to_index_logic[future]
                 try:
                     result = future.result()
-                    results.append(result)
+                    results[index] = result  # Store result at the correct index
                 except Exception as exc:
-                    print(f'Logic {future_to_logic[future]} generated an exception: {exc}')
+                    print(f'Logic {logic} generated an exception: {exc}')
+                    # Store None or a default value for failed logic
+                    results[index] = None
 
         reduced_result = self._reduce(results)
         return reduced_result

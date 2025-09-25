@@ -6,7 +6,6 @@ from typing import List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 
-from logic.nlp.utils import normalize_text
 
 logger = logging.getLogger(__name__)
 
@@ -30,91 +29,76 @@ class DetectNumericalRequirementInQueryLogic(BaseLogic):
             logger.warning(f"Failed to initialize NLP processor: {exc}")
             self._nlp = None
 
-        # Core Vietnamese numerical intent keywords (normalized, lowercase, no diacritics)
+        # Core Vietnamese numerical intent keywords (with diacritics preserved)
         self._num_keywords = {
-            "thong ke",
-            "so sanh",
-            "ti le",  # tỷ lệ / tỉ lệ -> ti le
-            "ti trong",
-            "so luong",
-            "so lieu",
-            "bao nhieu",
-            "so vi tri",
-            "bieu do",
-            "xep hang",
+            "thống kê",
+            "so sánh",
+            "tỷ lệ", "tỉ lệ",  # both variants
+            "tỷ trọng", "tỉ trọng",
+            "số lượng",
+            "số liệu",
+            "bao nhiêu",
+            "số vị trí",
+            "biểu đồ",
+            "xếp hạng",
             "ranking",
             "top",
-            "phan tram",
-            "trung binh",
-            "tong",
-            "dem",
+            "phần trăm",
+            "trung bình",
+            "tổng",
+            "đếm",
             "max",
             "min",
             "median",
-            "tong hop",
-            "thay doi",
-            "tang truong",
-            "giam",
+            "tổng hợp",
+            "thay đổi",
+            "tăng trưởng",
+            "tăng",
+            "giảm",
         }
 
-        # Comparative markers (normalized)
+        # Comparative markers (with diacritics preserved)
         self._comparatives = {
-            "hon",            # hơn
-            "it hon",
-            "nhieu hon",
-            "cao hon",
-            "thap hon",
-            "lon nhat",
-            "nho nhat",
-            "tot nhat",
-            "xau nhat",
+            "hơn",
+            "ít hơn",
+            "nhiều hơn",
+            "cao hơn",
+            "thấp hơn",
+            "lớn nhất",
+            "nhỏ nhất",
+            "tốt nhất",
+            "xấu nhất",
+            "tệ nhất",
         }
 
-        # Regex patterns capturing numerics/percentages/rank forms in normalized text
+        # Regex patterns capturing numerics/percentages/rank forms with Vietnamese diacritics
         self._regex_patterns = [
-            re.compile(r"\btop\s*\d+\b"),
-            re.compile(r"\bhang\s*\d+\b"),
+            re.compile(r"\btop\s*\d+\b", re.IGNORECASE),
+            re.compile(r"\bhạng\s*\d+\b", re.IGNORECASE),
             re.compile(r"\b\d+\s*%\b"),
-            re.compile(r"\b(phan tram|ti le)\b"),
-            re.compile(r"\b(so luong|so lieu)\b"),
+            re.compile(r"\b(tăng|giảm|tăng trưởng)\s+\d+\s*%\b", re.IGNORECASE),  # tăng/giảm + percentage
+            re.compile(r"\b(phần trăm|tỷ lệ|tỉ lệ)\b", re.IGNORECASE),
+            re.compile(r"\b(số lượng|số liệu)\b", re.IGNORECASE),
+            re.compile(r"\b(thống kê|so sánh|xếp hạng)\b", re.IGNORECASE),
         ]
 
-    def _detect_keywords(self, normalized_text: str) -> bool:
-        return any(kw in normalized_text for kw in self._num_keywords)
+    def _detect_keywords(self, text: str) -> bool:
+        text_lower = text.lower()
+        return any(kw in text_lower for kw in self._num_keywords)
 
-    def _detect_comparatives(self, normalized_text: str) -> bool:
-        return any(kw in normalized_text for kw in self._comparatives)
+    def _detect_comparatives(self, text: str) -> bool:
+        text_lower = text.lower()
+        return any(kw in text_lower for kw in self._comparatives)
 
-    def _detect_regex(self, normalized_text: str) -> bool:
-        return any(p.search(normalized_text) is not None for p in self._regex_patterns)
-
-    def _detect_pos_numeric(self, text: str) -> bool:
-        """Use Vietnamese POS to detect numerals/quantifiers presence with nouns/metrics."""
-        try:
-            if not self._nlp:
-                return False
-            # Tokenization + POS
-            result = self._nlp.process_text(text)
-            pos_tags = result.pos_tags or []
-            # Heuristic: presence of numerals with adjacent nouns or measure words
-            # underthesea often tags numbers as 'M'. We'll also fall back to digits regex.
-            has_digit = bool(re.search(r"\d", text))
-
-            has_numeral_tag = any(tag.upper().startswith("M") for _, tag in pos_tags)
-            has_noun = any(tag.upper().startswith("N") for _, tag in pos_tags)
-
-            return (has_numeral_tag and has_noun) or (has_digit and has_noun)
-        except Exception as exc:
-            logger.warning(f"POS-based numeric detection failed: {exc}")
-            return False
+    def _detect_regex(self, text: str) -> bool:
+        return any(p.search(text) is not None for p in self._regex_patterns)
 
     def _parallel_detection(self, query: str) -> List[bool]:
-        normalized = normalize_text(query)
+        # Use original query with diacritics preserved
         tasks = [
-            (self._detect_keywords, (normalized,)),
-            (self._detect_comparatives, (normalized,)),
-            (self._detect_regex, (normalized,)),
-            (self._detect_pos_numeric, (query,)),
+            (self._detect_keywords, (query,)),
+            (self._detect_comparatives, (query,)),
+            (self._detect_regex, (query,)),
         ]
 
         results: List[bool] = []
@@ -130,28 +114,53 @@ class DetectNumericalRequirementInQueryLogic(BaseLogic):
 
     def forward(self, query: str):
         """
-        Return [[1,0,0,0,0]] if numerical requirement is detected, else zeros.
+        Detect numerical requirements and return tailored vectors for 8 workers.
+        
+        Workers mapping:
+        0: FUNCTION_CALLER_AGENT (numerical/statistical queries)
+        1: DOCS_SEARCHER_AGENT (documentation lookup)
+        2: NETMIND_INFOR_AGENT
+        3: REGION_IDENTIFIER_AGENT  
+        4: WEBS_SEARCHER_AGENT
+        5: TIME_IDENTIFIER_AGENT
+        6: EMPLOYEE_INFOR_AGENT
+        7: REMINDER_AGENT
+        
+        Returns:
+            Vector: Probability distribution over 8 workers based on numerical requirements
         """
         logger.debug(f"[DetectNumericalRequirementInQueryLogic] Processing query: '{query}'")
 
         if not query or not isinstance(query, str):
             logger.debug("[DetectNumericalRequirementInQueryLogic] Invalid input, returning zero vector")
-            return np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
+            return np.array([[0, 0, 0, 0, 0, 0, 0, 0]], dtype=np.float32)
 
         # Run ensemble detections in parallel
-        kwords, comps, regexes, posnum = self._parallel_detection(query)
-        logger.debug(f"[DetectNumericalRequirementInQueryLogic] Detectors -> keywords={kwords}, comparatives={comps}, regex={regexes}, pos_numeric={posnum}")
+        kwords, comps, regexes = self._parallel_detection(query)
+        logger.debug(f"[DetectNumericalRequirementInQueryLogic] Detectors -> keywords={kwords}, comparatives={comps}, regex={regexes}")
 
-        # Decision rule: any signal indicates a numerical request
-        is_numerical = any([kwords, comps, regexes, posnum])
-
-        if is_numerical:
-            result = np.array([[1, 0, 0, 0, 0]], dtype=np.float32)
-            logger.debug(f"[DetectNumericalRequirementInQueryLogic] Output vector: {result.tolist()} (numerical detected)")
+        # Initialize result vector for 8 workers
+        result = np.array([[0, 0, 0, 0, 0, 0, 0, 0]], dtype=np.float32)
+        
+        if any([kwords, comps, regexes]):
+            if kwords:
+                result[0][0] += 0.8
+                result[0][1] += 0.2
+            if comps:
+                result[0][0] += 0.8
+                result[0][1] += 0.2
+            if regexes:
+                result[0][0] += 0.5
+                result[0][1] += 0.5
         else:
-            result = np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
-            logger.debug(f"[DetectNumericalRequirementInQueryLogic] Output vector: {result.tolist()} (no numerical signal)")
+            result = np.array([[0, 0, 0, 0, 0, 0, 0, 0]], dtype=np.float32)
 
+        # Normalize to ensure sum = 1
+        if np.sum(result) > 0:
+            result = result / np.sum(result)
+
+        logger.debug(f"[DetectNumericalRequirementInQueryLogic] Final contribution - Query: '{query}' -> Detectors: keywords={kwords}, comparatives={comps}, regex={regexes} -> Vector: {result.tolist()}")
+        
         return result
 
 
