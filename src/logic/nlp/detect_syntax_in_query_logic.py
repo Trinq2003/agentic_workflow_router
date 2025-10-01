@@ -71,6 +71,7 @@ class DetectSyntaxInQueryLogic(BaseLogic):
                     # Avoid matching if preceded by words like "folder", "directory", "file", "path"
                     path_context_pattern = rf'(folder|directory|file|path|contains|in|the)\s+{re.escape(separator)}{re.escape(command)}'
                     if not re.search(path_context_pattern, padded_lower, re.IGNORECASE):
+                        logger.debug(f"[DetectSyntaxInQueryLogic]\tFound command: '{pattern}' in query")
                         results[i] = 1.0
                         break  # Found this command, no need to check other separators
 
@@ -98,8 +99,7 @@ class DetectSyntaxInQueryLogic(BaseLogic):
             
             # Reminder-related actions
             "ghi nhớ", "ghi chú", "lưu ý", "chú ý",
-            "đặt lịch", "đặt nhắc", "báo thức",
-            "thông báo", "cảnh báo", "nhắc việc",
+            "đặt lịch", "đặt nhắc", "báo thức", "nhắc việc",
             
             # Memory-related verbs
             "nhớ", "quên", "làm nhớ", "giúp nhớ",
@@ -141,13 +141,13 @@ class DetectSyntaxInQueryLogic(BaseLogic):
             # For multi-word phrases, use simple substring matching
             if len(word.split()) > 1:
                 if word in query_lower:
-                    logger.debug(f"[DetectSyntaxInQueryLogic] Found reminder phrase: '{word}' in query")
+                    logger.debug(f"[DetectSyntaxInQueryLogic]\tFound reminder phrase: '{word}' in query")
                     return True
             else:
                 # For single words, use word boundary matching
                 pattern = r'\b' + re.escape(word) + r'\b'
                 if re.search(pattern, query_lower):
-                    logger.debug(f"[DetectSyntaxInQueryLogic] Found reminder word: '{word}' in query")
+                    logger.debug(f"[DetectSyntaxInQueryLogic]\tFound reminder word: '{word}' in query")
                     return True
         
         return False

@@ -84,14 +84,26 @@ class DetectNumericalRequirementInQueryLogic(BaseLogic):
 
     def _detect_keywords(self, text: str) -> bool:
         text_lower = text.lower()
-        return any(kw in text_lower for kw in self._num_keywords)
+        for kw in self._num_keywords:
+            if kw in text_lower:
+                logger.debug(f"[DetectNumericalRequirementInQueryLogic]\tFound numerical keyword: '{kw}' in query")
+                return True
+        return False
 
     def _detect_comparatives(self, text: str) -> bool:
         text_lower = text.lower()
-        return any(kw in text_lower for kw in self._comparatives)
+        for kw in self._comparatives:
+            if kw in text_lower:
+                logger.debug(f"[DetectNumericalRequirementInQueryLogic]\tFound comparative: '{kw}' in query")
+                return True
+        return False
 
     def _detect_regex(self, text: str) -> bool:
-        return any(p.search(text) is not None for p in self._regex_patterns)
+        for p in self._regex_patterns:
+            if p.search(text) is not None:
+                logger.debug(f"[DetectNumericalRequirementInQueryLogic]\tFound numerical regex pattern: '{p.pattern}' in query")
+                return True
+        return False
 
     def _parallel_detection(self, query: str) -> List[bool]:
         # Use original query with diacritics preserved

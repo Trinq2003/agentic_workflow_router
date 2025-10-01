@@ -153,6 +153,7 @@ class FindTimePatternInQueryLogic(BaseLogic):
         # Check regex patterns
         for pattern in self.time_patterns:
             if re.search(pattern, query_lower, re.IGNORECASE):
+                logger.debug(f"[FindTimePatternInQueryLogic]\tFound time regex pattern: '{pattern}' in query")
                 return True
         return False
 
@@ -164,6 +165,7 @@ class FindTimePatternInQueryLogic(BaseLogic):
         for category in self.time_keywords.values():
             for keyword in category:
                 if keyword in query_lower:
+                    logger.debug(f"[FindTimePatternInQueryLogic]\tFound time keyword: '{keyword}' in query")
                     return True
 
         return False
@@ -183,6 +185,7 @@ class FindTimePatternInQueryLogic(BaseLogic):
                 for entity in analysis.entities:
                     entity_type = entity.get('type', '').upper()
                     if any(keyword in entity_type for keyword in ['DATE', 'TIME', 'TEMPORAL', 'EVENT']):
+                        logger.debug(f"[FindTimePatternInQueryLogic]\tFound NLP entity type: '{entity_type}' in query")
                         return True
 
             # Check if the query contains temporal keywords based on NLP analysis
@@ -191,6 +194,7 @@ class FindTimePatternInQueryLogic(BaseLogic):
             # Use language-specific temporal indicators
             for indicator in self.temporal_indicators:
                 if indicator in text_lower:
+                    logger.debug(f"[FindTimePatternInQueryLogic]\tFound temporal indicator: '{indicator}' in query")
                     return True
 
         except Exception as e:

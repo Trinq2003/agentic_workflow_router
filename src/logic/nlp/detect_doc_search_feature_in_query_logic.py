@@ -40,7 +40,7 @@ class DetectDocSearchFeatureInQueryLogic(BaseLogic):
 
         # Question endings and starts
         self.question_endings = [
-            "là gì", "như thế nào", "là", "bao lâu", "làm gì", "nào"
+            "là gì", "như thế nào", "là", "bao lâu", "làm gì", "lỗi nào", "lỗi gì"
         ]
         self.question_starts = [
             "liệt kê", "tại sao", "giải thích", "khuyến nghị", "làm thế nào",
@@ -61,12 +61,21 @@ class DetectDocSearchFeatureInQueryLogic(BaseLogic):
         """Return (has_nouns, has_verbs, noun_hits, verb_hits)."""
         has_nouns, noun_hits = self._contains_any_phrase(query, self.doc_nouns)
         has_verbs, verb_hits = self._contains_any_phrase(query, self.doc_verbs)
+
+        # Secondary logging for matched keywords
+        if has_nouns:
+            for hit in noun_hits:
+                logger.debug(f"[DetectDocSearchFeatureInQueryLogic]\tFound doc noun: '{hit}' in query")
+        if has_verbs:
+            for hit in verb_hits:
+                logger.debug(f"[DetectDocSearchFeatureInQueryLogic]\tFound doc verb: '{hit}' in query")
         return has_nouns, has_verbs, noun_hits, verb_hits
 
     def _detect_question_start(self, query: str) -> Tuple[bool, str]:
         q = query.strip().lower()
         for starter in self.question_starts:
             if q.startswith(starter + " ") or q == starter:
+                logger.debug(f"[DetectDocSearchFeatureInQueryLogic]\tFound question start: '{starter}' in query")
                 return True, starter
         return False, ""
 
@@ -76,13 +85,17 @@ class DetectDocSearchFeatureInQueryLogic(BaseLogic):
             # allow optional punctuation at the end
             pattern = rf"{re.escape(ending)}\s*[?.!]*$"
             if re.search(pattern, q):
+                logger.debug(f"[DetectDocSearchFeatureInQueryLogic]\tFound question end: '{ending}' in query")
                 return True, ending
         return False, ""
 
     def _detect_short_definition(self, query: str) -> bool:
         q = query.strip().lower()
         # Common short forms: "X là gì", "X như thế nào"
-        return bool(re.search(r"\b(là gì|như thế nào)\b", q))
+        if re.search(r"\b(là gì|như thế nào)\b", q):
+            logger.debug("[DetectDocSearchFeatureInQueryLogic]\tFound short definition pattern in query")
+            return True
+        return False
 
     def _parallel_detection(self, query: str) -> Tuple[Tuple[bool, bool, List[str], List[str]], Tuple[bool, str], Tuple[bool, str], bool]:
         results = [None, None, None, None]  # type: ignore

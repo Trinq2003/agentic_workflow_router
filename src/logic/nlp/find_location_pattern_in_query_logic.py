@@ -51,7 +51,7 @@ class FindLocationPatternInQueryLogic(BaseLogic):
                 if is_known_location(candidate):
                     contains_location = True
                     detected_locations.append(candidate)
-                    logger.debug(f"[FindLocationPatternInQueryLogic] Matched location candidate: '{candidate}'")
+                    logger.debug(f"[FindLocationPatternInQueryLogic]\tMatched location candidate: '{candidate}'")
                     break
             if contains_location:
                 break
