@@ -4,6 +4,7 @@ import numpy as np
 import re
 from typing import List, Dict, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Union
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,10 +31,10 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
 
         logger.info("Initialized DetectHumanFeatureInQueryLogic")
 
-    def _detect_human_name(self, query: str) -> bool:
+    def _detect_human_name(self, query: str) -> Union[str, None]:
         """Detect human names using NER."""
         if not self.nlp_processor:
-            return False
+            return None
 
         try:
             # Use comprehensive analysis to detect entities
@@ -44,12 +45,19 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
                 for entity in analysis.entities:
                     entity_type = entity.get('label', '').upper()
                     if any(keyword in entity_type for keyword in ['PERSON', 'PER', 'HUMAN']):
-                        return True
+                        entity_text = str(entity.get('text', '')).strip()
+                        token_count = len(entity_text.split()) if entity_text else 0
+                        if token_count < 2:
+                            logger.debug(f"[DetectHumanFeatureInQueryLogic]\tFound human entity (>=2 tokens): text='{entity_text}', label='{entity_type}'")
+                            return 'single'
+                        else:
+                            logger.debug(f"[DetectHumanFeatureInQueryLogic]\tIgnored human entity (single token): text='{entity_text}', label='{entity_type}'")
+                            return 'multiple'
 
         except Exception as e:
             logger.warning(f"NLP human name detection failed: {e}")
 
-        return False
+        return None
 
     def _detect_user_id(self, query: str) -> bool:
         """Detect 6-digit user IDs (000000-999999)."""
@@ -61,6 +69,7 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
             # Check if it's within the valid range (000000-999999)
             user_id = int(match)
             if 0 <= user_id <= 999999:
+                logger.debug(f"[DetectHumanFeatureInQueryLogic]\tFound user id: '{match}' in query")
                 return True
 
         return False
@@ -72,6 +81,7 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
         for kw in self.nlp_processor.analyze_text_comprehensive(query).keywords:
             # Check if it follows the encoding pattern
             if self._is_valid_username_encoding(kw):
+                logger.debug(f"[DetectHumanFeatureInQueryLogic]\tFound username encoding: '{kw}' in query")
                 return True
 
         return False
@@ -90,6 +100,37 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
             return True
         
         return False
+
+    def _detect_phone_number(self, query: str) -> bool:
+        """
+        Detect Vietnamese phone numbers (mobile or landline) with formats:
+        - Starting with '0' followed by 9 digits (10 digits total), spaces allowed between digits
+        - Starting with '+84' followed by 9 digits (spaces allowed)
+        Secondary logging reports matched and normalized numbers.
+        """
+        if not query or not isinstance(query, str):
+            return False
+
+        # Patterns allow optional spaces between digits
+        patterns = [
+            r'(?<!\d)0(?:\s*\d){9}(?!\d)',      # e.g., 0 912 345 678 or 0912345678
+            r'(?<!\d)\+84(?:\s*\d){9}(?!\d)',  # e.g., +84 912 345 678 or +84912345678
+        ]
+
+        found = False
+        for p in patterns:
+            for m in re.finditer(p, query):
+                raw = m.group(0)
+                normalized = re.sub(r'\s+', '', raw)
+                # Normalize +84 to leading 0 for display consistency
+                if normalized.startswith('+84'):
+                    normalized_display = '0' + normalized[3:]
+                else:
+                    normalized_display = normalized
+                logger.debug(f"[DetectHumanFeatureInQueryLogic]\tFound phone number: '{raw}' (normalized: '{normalized_display}')")
+                found = True
+
+        return found
 
     def _detect_self_referential_words(self, query: str) -> bool:
         """
@@ -145,11 +186,11 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
             if len(word.split()) == 1 and len(word) <= 3:  # Short single words need boundary check
                 pattern = r'\b' + re.escape(word) + r'\b'
                 if re.search(pattern, query_lower):
-                    logger.debug(f"[DetectHumanFeatureInQueryLogic] Found self-referential word: '{word}' in query")
+                    logger.debug(f"[DetectHumanFeatureInQueryLogic]\tFound self-referential word: '{word}' in query")
                     return True
             else:  # Multi-word phrases or longer words can use simple substring matching
                 if word in query_lower:
-                    logger.debug(f"[DetectHumanFeatureInQueryLogic] Found self-referential word: '{word}' in query")
+                    logger.debug(f"[DetectHumanFeatureInQueryLogic]\tFound self-referential word: '{word}' in query")
                     return True
         
         # Additional pattern matching for common Vietnamese self-reference patterns
@@ -167,14 +208,14 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
         
         for pattern in patterns:
             if re.search(pattern, query_lower):
-                logger.debug(f"[DetectHumanFeatureInQueryLogic] Found self-referential pattern: '{pattern}' in query")
+                logger.debug(f"[DetectHumanFeatureInQueryLogic]\tFound self-referential pattern: '{pattern}' in query")
                 return True
         
         return False
 
     def _parallel_detection(self, query: str) -> List[bool]:
         """Run detection methods in parallel for optimization."""
-        results = [False] * 4  # Pre-allocate for ordered results
+        results = [False] * 5  # Pre-allocate for ordered results
 
         with ThreadPoolExecutor(max_workers=4) as executor:
             # Submit tasks with their index to maintain order
@@ -182,7 +223,8 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
                 executor.submit(self._detect_human_name, query): 0,
                 executor.submit(self._detect_user_id, query): 1,
                 executor.submit(self._detect_username, query): 2,
-                executor.submit(self._detect_self_referential_words, query): 3
+                executor.submit(self._detect_self_referential_words, query): 3,
+                executor.submit(self._detect_phone_number, query): 4,
             }
 
             # Collect results in order
@@ -226,11 +268,12 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
         detection_results = self._parallel_detection(query)
         
         # Break down detection results
-        human_name_detected, user_id_detected, username_detected, self_ref_detected = detection_results
+        human_name_detected, user_id_detected, username_detected, self_ref_detected, phone_detected = detection_results
         logger.debug(f"[DetectHumanFeatureInQueryLogic] Human names detected: {human_name_detected}")
         logger.debug(f"[DetectHumanFeatureInQueryLogic] User IDs detected: {user_id_detected}")
         logger.debug(f"[DetectHumanFeatureInQueryLogic] Usernames detected: {username_detected}")
         logger.debug(f"[DetectHumanFeatureInQueryLogic] Self-referential words detected: {self_ref_detected}")
+        logger.debug(f"[DetectHumanFeatureInQueryLogic] Phone numbers detected: {phone_detected}")
 
         # Create contribution mapping for this logic
         detected_features = []
@@ -259,13 +302,19 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
             if user_id_detected:
                 result[0][6] += 0.9  # EMPLOYEE_INFOR_AGENT
                 result[0][7] += 0.1  # REMINDER_AGENT
-            
+                
             if username_detected:
                 result[0][6] += 0.9  # EMPLOYEE_INFOR_AGENT
                 result[0][7] += 0.1  # REMINDER_AGENT
+
+            if phone_detected:
+                result[0][6] += 0.7  # EMPLOYEE_INFOR_AGENT
+                result[0][7] += 0.3  # REMINDER_AGENT
             
             # If general human names detected - balanced approach
-            if human_name_detected:
+            if human_name_detected == 'single':
+                result[0][1] += 1  # DOCS_SEARCHER_AGENT
+            if human_name_detected == 'multiple':
                 result[0][6] += 0.5  # EMPLOYEE_INFOR_AGENT
                 result[0][7] += 0.5  # REMINDER_AGENT
         else:
