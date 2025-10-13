@@ -311,9 +311,9 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
                 result[0][6] += 0.7  # EMPLOYEE_INFOR_AGENT
                 result[0][7] += 0.3  # REMINDER_AGENT
             
-            # If general human names detected - balanced approach
+            # If general human names detected
             if human_name_detected == 'single':
-                result[0][1] += 1  # DOCS_SEARCHER_AGENT
+                pass
             if human_name_detected == 'multiple':
                 result[0][6] += 0.5  # EMPLOYEE_INFOR_AGENT
                 result[0][7] += 0.5  # REMINDER_AGENT

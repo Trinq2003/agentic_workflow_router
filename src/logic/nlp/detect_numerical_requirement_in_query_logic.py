@@ -55,6 +55,8 @@ class DetectNumericalRequirementInQueryLogic(BaseLogic):
             "tăng trưởng",
             "tăng",
             "giảm",
+            "tra cứu",
+            "tổng cộng"
         }
 
         # Comparative markers (with diacritics preserved)
@@ -162,8 +164,8 @@ class DetectNumericalRequirementInQueryLogic(BaseLogic):
                 result[0][0] += 0.8
                 result[0][1] += 0.2
             if regexes:
-                result[0][0] += 0.5
-                result[0][1] += 0.5
+                result[0][0] += 0.8
+                result[0][1] += 0.2
         else:
             result = np.array([[0, 0, 0, 0, 0, 0, 0, 0]], dtype=np.float32)
 
