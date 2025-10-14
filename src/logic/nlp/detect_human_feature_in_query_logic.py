@@ -33,12 +33,16 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
 
     def _detect_human_name(self, query: str) -> Union[str, None]:
         """Detect human names using NER."""
-        if not self.nlp_processor:
-            return None
-
+        # Prefer shared context if available
         try:
-            # Use comprehensive analysis to detect entities
-            analysis = self.nlp_processor.analyze_text_comprehensive(query)
+            analysis = None
+            if getattr(self, "_context", None):
+                analysis = self._context.get("analysis")
+            if analysis is None:
+                if not self.nlp_processor:
+                    return None
+                # Use comprehensive analysis if no shared context
+                analysis = self.nlp_processor.analyze_text_comprehensive(query)
 
             # Check for person entities
             if analysis.entities:
@@ -77,13 +81,23 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
 
     def _detect_username(self, query: str) -> bool:
         """Detect usernames in encoded format."""
-        query_lower = query.lower()
+        # Prefer shared context keywords
+        try:
+            analysis = None
+            if getattr(self, "_context", None):
+                analysis = self._context.get("analysis")
+            keywords = []
+            if analysis and getattr(analysis, "keywords", None):
+                keywords = analysis.keywords
+            elif self.nlp_processor:
+                keywords = self.nlp_processor.analyze_text_comprehensive(query).keywords
 
-        for kw in self.nlp_processor.analyze_text_comprehensive(query).keywords:
-            # Check if it follows the encoding pattern
-            if self._is_valid_username_encoding(kw):
-                logger.debug(f"[DetectHumanFeatureInQueryLogic]\tFound username encoding: '{kw}' in query")
-                return True
+            for kw in keywords:
+                if self._is_valid_username_encoding(kw):
+                    logger.debug(f"[DetectHumanFeatureInQueryLogic]\tFound username encoding: '{kw}' in query")
+                    return True
+        except Exception as e:
+            logger.warning(f"Username detection failed: {e}")
 
         return False
     

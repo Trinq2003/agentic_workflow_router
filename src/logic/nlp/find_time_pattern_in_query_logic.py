@@ -172,12 +172,16 @@ class FindTimePatternInQueryLogic(BaseLogic):
 
     def _detect_nlp_entities(self, query: str) -> bool:
         """Detect time entities using NLP."""
-        if not self.nlp_processor:
-            return False
-
+        # Prefer shared context if available
         try:
-            # Use comprehensive analysis to detect entities
-            analysis = self.nlp_processor.analyze_text_comprehensive(query)
+            analysis = None
+            if getattr(self, "_context", None):
+                analysis = self._context.get("analysis")
+            # Fallback to self NLP if no context
+            if analysis is None and self.nlp_processor:
+                analysis = self.nlp_processor.analyze_text_comprehensive(query)
+            if analysis is None:
+                return False
 
             # Check for date/time entities
             if analysis.entities:

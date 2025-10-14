@@ -59,9 +59,16 @@ class DetectNetmindInQueryLogic(BaseLogic):
         if not matches:
             return False
 
+        # Prefer shared context entities if available
         try:
-            ner_result = nlp_processor.process_text(query, techniques=[NLPTechnique.NAMED_ENTITY_RECOGNITION])
-            entities = ner_result.entities or []
+            entities = []
+            if getattr(self, "_context", None):
+                analysis = self._context.get("analysis")
+                if analysis and getattr(analysis, "entities", None):
+                    entities = analysis.entities or []
+            if not entities:
+                ner_result = nlp_processor.process_text(query, techniques=[NLPTechnique.NAMED_ENTITY_RECOGNITION])
+                entities = ner_result.entities or []
         except Exception as e:
             logger.warning(f"NER failed while checking 'đồng chí' context: {e}")
             entities = []

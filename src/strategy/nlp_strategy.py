@@ -13,6 +13,7 @@ from logic.nlp import (
     DetectDocSearchFeatureInQueryLogic,
     DetectNetmindInQueryLogic,
 )
+from models import nlp_processor
 logger = logging.getLogger(__name__)
 
 
@@ -105,6 +106,34 @@ class WorkerLabelingNLPStrategy(BaseStrategy):
         except Exception as e:
             logger.error(f"[WorkerLabelingNLPStrategy] Error in vote-based reduction: {e}")
             raise
+
+    def forward(self, query: str) -> List[Any]:
+        """
+        Override to inject a shared NLP analysis context into logics before
+        executing them in parallel.
+        """
+        # Build shared context once per query (comprehensive analysis)
+        try:
+            analysis = nlp_processor.analyze_text_comprehensive(query)
+            shared_context = {
+                "analysis": analysis,
+                "cleaned_text": getattr(analysis, "cleaned_text", ""),
+                "language": getattr(analysis, "language", None),
+            }
+        except Exception:
+            shared_context = None
+
+        # Inject context into each logic (best-effort)
+        for logic in self.logics:
+            try:
+                if hasattr(logic, "set_context"):
+                    logic.set_context(shared_context)
+            except Exception:
+                # Non-fatal; logic will fallback to its own processing
+                pass
+
+        # Delegate to BaseStrategy to run logics in parallel and reduce
+        return super().forward(query)
 
 
 # Alias for backward compatibility
