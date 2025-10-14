@@ -97,6 +97,13 @@ class DetectDocSearchFeatureInQueryLogic(BaseLogic):
             return True
         return False
 
+    def _is_netmind_definition_question(self, query: str) -> bool:
+        """Return True if query is of the form 'NetMind là gì' (case-insensitive)."""
+        q = query.strip().lower()
+        # Match both 'netmind' and 'net mind' directly preceding 'là gì'
+        pattern = r"(?:\bnet\s*mind\b)"
+        return re.search(pattern, q, flags=re.IGNORECASE) is not None
+
     def _parallel_detection(self, query: str) -> Tuple[Tuple[bool, bool, List[str], List[str]], Tuple[bool, str], Tuple[bool, str], bool]:
         results = [None, None, None, None]  # type: ignore
         with ThreadPoolExecutor(max_workers=4) as executor:
@@ -153,10 +160,11 @@ class DetectDocSearchFeatureInQueryLogic(BaseLogic):
             result[0][1] += 1
         if start_hit:
             result[0][1] += 1
-        if end_hit:
-            result[0][1] += 1
-        if short_def:
-            result[0][1] += 1
+        if end_hit or short_def:
+            if not self._is_netmind_definition_question(query):
+                result[0][1] += 1
+            else:
+                logger.debug("[DetectDocSearchFeatureInQueryLogic] Skipping DOCS weight for 'NetMind' pattern")
 
         # Normalize
         if np.sum(result) > 0:

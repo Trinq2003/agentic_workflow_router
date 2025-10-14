@@ -204,11 +204,8 @@ class DetectNetmindInQueryLogic(BaseLogic):
         result = np.array([[0, 0, 0, 0, 0, 0, 0, 0]], dtype=np.float32)
 
         anchor_ok = has_netmind or has_pronoun
-        if anchor_ok and is_simple:
+        if anchor_ok:
             result[0][2] = 1.0
-        else:
-            logger.debug("[DetectNetmindInQueryLogic] Conditions not met -> zero vector")
-            return result
 
         # Already one-hot; keep normalization step for consistency
         if np.sum(result) > 0:
