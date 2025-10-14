@@ -4,6 +4,7 @@ from logic.nlp.detect_human_feature_in_query_logic import DetectHumanFeatureInQu
 from logic.nlp.detect_doc_search_feature_in_query_logic import DetectDocSearchFeatureInQueryLogic
 from logic.nlp.find_location_pattern_in_query_logic import FindLocationPatternInQueryLogic
 from logic.nlp.detect_numerical_requirement_in_query_logic import DetectNumericalRequirementInQueryLogic
+from logic.nlp.detect_netmind_in_query_logic import DetectNetmindInQueryLogic
 
 __all__ = [
     'DetectSyntaxInQueryLogic',
@@ -12,4 +13,5 @@ __all__ = [
     'DetectDocSearchFeatureInQueryLogic',
     'FindLocationPatternInQueryLogic',
     'DetectNumericalRequirementInQueryLogic',
+    'DetectNetmindInQueryLogic',
 ]

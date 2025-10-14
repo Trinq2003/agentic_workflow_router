@@ -56,7 +56,8 @@ class DetectNumericalRequirementInQueryLogic(BaseLogic):
             "tăng",
             "giảm",
             "tra cứu",
-            "tổng cộng"
+            "tổng cộng",
+            "hiệu suất"
         }
 
         # Comparative markers (with diacritics preserved)
@@ -84,20 +85,22 @@ class DetectNumericalRequirementInQueryLogic(BaseLogic):
             re.compile(r"\b(thống kê|so sánh|xếp hạng)\b", re.IGNORECASE),
         ]
 
+        # Precompile boundary-safe regex for keyword and comparative detection
+        self._num_keywords_re = self._compile_word_boundary_regex(self._num_keywords)
+        self._comparatives_re = self._compile_word_boundary_regex(self._comparatives)
+
     def _detect_keywords(self, text: str) -> bool:
-        text_lower = text.lower()
-        for kw in self._num_keywords:
-            if kw in text_lower:
-                logger.debug(f"[DetectNumericalRequirementInQueryLogic]\tFound numerical keyword: '{kw}' in query")
-                return True
+        match = self._num_keywords_re.search(text)
+        if match is not None:
+            logger.debug(f"[DetectNumericalRequirementInQueryLogic]\tFound numerical keyword: '{match.group(0)}' in query")
+            return True
         return False
 
     def _detect_comparatives(self, text: str) -> bool:
-        text_lower = text.lower()
-        for kw in self._comparatives:
-            if kw in text_lower:
-                logger.debug(f"[DetectNumericalRequirementInQueryLogic]\tFound comparative: '{kw}' in query")
-                return True
+        match = self._comparatives_re.search(text)
+        if match is not None:
+            logger.debug(f"[DetectNumericalRequirementInQueryLogic]\tFound comparative: '{match.group(0)}' in query")
+            return True
         return False
 
     def _detect_regex(self, text: str) -> bool:
@@ -177,4 +180,21 @@ class DetectNumericalRequirementInQueryLogic(BaseLogic):
         
         return result
 
+
+
+    def _compile_word_boundary_regex(self, terms: set[str]) -> re.Pattern:
+        """
+        Compile a regex that matches any of the given terms only when they are not
+        part of a larger word (i.e., bounded by non-word characters on both sides).
+
+        This prevents false positives like matching "min" inside "NetMind" while
+        still matching standalone tokens and multi-word phrases with proper boundaries.
+        """
+        # Sort by length (desc) to prefer longer phrases when building alternation
+        escaped_terms = sorted((re.escape(t) for t in terms), key=len, reverse=True)
+        if not escaped_terms:
+            # Fallback: a regex that never matches
+            return re.compile(r"a^")
+        pattern = r"(?<!\w)(?:" + "|".join(escaped_terms) + r")(?!\w)"
+        return re.compile(pattern, re.IGNORECASE)
 

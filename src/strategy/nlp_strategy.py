@@ -11,6 +11,7 @@ from logic.nlp import (
     FindLocationPatternInQueryLogic,
     DetectNumericalRequirementInQueryLogic,
     DetectDocSearchFeatureInQueryLogic,
+    DetectNetmindInQueryLogic,
 )
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class WorkerLabelingNLPStrategy(BaseStrategy):
         self.add_logic(DetectHumanFeatureInQueryLogic())
         self.add_logic(FindLocationPatternInQueryLogic())
         self.add_logic(DetectNumericalRequirementInQueryLogic())
+        self.add_logic(DetectNetmindInQueryLogic())
         # Load workers configuration
         self.workers = self._load_labels()
 

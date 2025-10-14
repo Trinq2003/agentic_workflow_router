@@ -40,7 +40,7 @@ class DetectDocSearchFeatureInQueryLogic(BaseLogic):
 
         # Question endings and starts
         self.question_endings = [
-            "là gì", "như thế nào", "là", "bao lâu", "làm gì", "lỗi nào", "lỗi gì"
+            "là gì", "như thế nào", "là", "bao lâu", "để làm gì", "lỗi nào", "lỗi gì"
         ]
         self.question_starts = [
             "liệt kê", "tại sao", "giải thích", "khuyến nghị", "làm thế nào",

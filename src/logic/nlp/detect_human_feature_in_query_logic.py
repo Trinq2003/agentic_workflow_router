@@ -47,6 +47,7 @@ class DetectHumanFeatureInQueryLogic(BaseLogic):
                     if any(keyword in entity_type for keyword in ['PERSON', 'PER', 'HUMAN']):
                         entity_text = str(entity.get('text', '')).strip()
                         token_count = len(entity_text.split()) if entity_text else 0
+                        logger.debug(f"[DetectHumanFeatureInQueryLogic]\tFound human entity: text='{entity_text}', label='{entity_type}', token_count='{token_count}'")
                         if token_count < 2:
                             logger.debug(f"[DetectHumanFeatureInQueryLogic]\tFound human entity (>=2 tokens): text='{entity_text}', label='{entity_type}'")
                             return 'single'
